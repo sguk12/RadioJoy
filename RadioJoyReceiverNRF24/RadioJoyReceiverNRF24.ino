@@ -1,11 +1,11 @@
 /**
- * This sketch is for Arduino SS Micro Pro 16Mhz 5V 
+ * This sketch is for Arduino SS Micro Pro 16Mhz 5V
  * It receives the joystick tilt data via the radio channel and
  * presents it to the USB hub.
- * The transmitter arduino (Pro Mini 8MHz 3.3V) reads the 
+ * The transmitter arduino (Pro Mini 8MHz 3.3V) reads the
  * ADXL345 sensor data.
- * 
- * 
+ *
+ *
  */
 
 
@@ -26,18 +26,18 @@ int blinkDelay=200;
 
 unsigned long lastRadioReset = 0;
 
-Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID, 
+Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
   JOYSTICK_TYPE_JOYSTICK, 12, 0,
   true, true, false, true, true, false,
 //  true, true, true, true, true, true,
   true, true, false, false, false);
-Joystick_ EdTracker(JOYSTICK_DEFAULT_REPORT_ID + 1, 
+Joystick_ EdTracker(JOYSTICK_DEFAULT_REPORT_ID + 1,
   JOYSTICK_TYPE_JOYSTICK, 0, 0,
   true, true, true, false, false, false,
   false, false, false, false, false);
-  
 
-RF24 radio(9, 8);// Arduino's pins connected to CE,CS pins on NRF24L01
+
+RF24 radio(9, 10);// radio(9, 8) Arduino's pins connected to CE,CS pins on NRF24L01
 
 void setup()
 {
@@ -56,8 +56,8 @@ void setup()
   EdTracker.setZAxisRange(-32767, 32767);
   EdTracker.begin(false);
 
-//  Serial.begin(115200);   // Debugging only
-//  printf_begin();
+//  Serial.begin(115200);   // DEBUG
+//  printf_begin();   // DEBUG
 
   radioBegin();
 }
@@ -79,11 +79,11 @@ void radioBegin(){
 void loop()
 {
 
-//  if(lastRadioReset == 0){
-//    lastRadioReset = millis();
-//    while (!Serial);             // Leonardo: wait for serial monitor
-//    radio.printDetails();
-//  }
+//  if(lastRadioReset == 0){   // DEBUG
+//    lastRadioReset = millis();   // DEBUG
+//    while (!Serial);   // DEBUG             // Leonardo: wait for serial monitor
+//    radio.printDetails();   // DEBUG
+//  }   // DEBUG
 
   if(numberOfBlinks == 1){
     blink3(1);
@@ -110,17 +110,17 @@ void loop()
   radio.stopListening();                                    // First, stop listening so we can talk.
   if (!radio.write( &fromRudderToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
     radio.startListening();
-//    Serial.println(F("failed rudder"));
+//    Serial.println(F("failed rudder"));   // DEBUG
   }else{
     readSlaveResponseAndUpdateJoystick();
   }
   delay(5);
- 
+
   // Send an invitation to the throttle slave
   radio.stopListening();                                    // First, stop listening so we can talk.
   if (!radio.write( &fromThrottleToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
     radio.startListening();
-//    Serial.println(F("failed throttle"));
+//    Serial.println(F("failed throttle"));   // DEBUG
   }else{
     readSlaveResponseAndUpdateJoystick();
   }
@@ -131,28 +131,28 @@ void loop()
   }else{
     blink3(0);
   }
-//  Serial.println(F("blink"));
+//  Serial.println(F("blink"));   // DEBUG
   delay(5);
 }
 
 void readSlaveResponseAndUpdateJoystick(){
-//  Serial.println("read");
+//  Serial.println("read");   // DEBUG
   radio.startListening();                                    // Now, continue listening
   unsigned long started_waiting_at = millis();               // Set up a timeout period, get the current microseconds
   boolean timeout = false;                                   // Set up a variable to indicate if a response was received or not
-  
+
   while ( ! radio.available() ){                             // While nothing is received
     if (millis() - started_waiting_at > 20 ){            // If waited longer than 20ms, indicate timeout and exit while loop
         timeout = true;
         break;
-    }      
+    }
   }
-      
+
   if ( timeout ){
       if (numberOfBlinks == 1){
         numberOfBlinks = 3;
       }
-//    Serial.println(F("Failed, response timed out."));
+//    Serial.println(F("Failed, response timed out."));   // DEBUG
   }else{
     do{
       RadioJoystick buf;
@@ -185,8 +185,8 @@ void readSlaveResponseAndUpdateJoystick(){
         if (numberOfBlinks == 1){
           numberOfBlinks = 6;
         }
-//          Serial.print("Message is not from rudder or not for me: ");
-//          Serial.println(buf.fromToByte);
+//          Serial.print("Message is not from rudder or not for me: ");   // DEBUG
+//          Serial.println(buf.fromToByte);   // DEBUG
       }
     }while(radio.available()); // read all the data from FIFO
   }
@@ -227,4 +227,3 @@ void blink3(boolean blinkOnOff)
 {
   digitalWrite(LED_PIN, blinkOnOff);
 }
-
