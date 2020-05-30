@@ -5,5 +5,9 @@ This is a wireless Joystick device. It consists of 3 or 4 modules:
 3) Transmitter2: Arduino pro mini 3.3v 8MHz handles the desktop part of the Joystick - 5 more axes TODO: add more details???
 4) EDTracker see here for more details: https://github.com/sguk12/EdTracker-radio
 
-1) Receiver schematics:
+## Dependencies:
+1) MHeironimus Joystick.h https://github.com/MHeironimus/ArduinoJoystickLibrary
+2) Trmh20 RF24 library http://tmrh20.github.io/RF24
+
+## Receiver schematics:
 ![Pro Micro based Receiver Module](/RadioJoyReceiverNRF24/receiver_schem.png?raw=true "Pro Micro based Receiver Module")
