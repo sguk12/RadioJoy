@@ -16,6 +16,15 @@
 #include <Joystick.h>
 #include "RadioJoy.h"
 
+// #define DEBUG
+#ifdef DEBUG
+  #define DEBUG_PRINTLN(x)  Serial.println(x)
+  #define DEBUG_PRINT(x)  Serial.print(x)
+#else
+  #define DEBUG_PRINTLN(x)
+  #define DEBUG_PRINT(x)
+#endif
+
 #define LED_PIN 17
 boolean blinkState;
 // Timer related so track operations between loop iterations (LED flashing, etc)
@@ -55,9 +64,10 @@ void setup()
   EdTracker.setYAxisRange(-32767, 32767);
   EdTracker.setZAxisRange(-32767, 32767);
   EdTracker.begin(false);
-
-//  Serial.begin(115200);   // DEBUG
-//  printf_begin();   // DEBUG
+#ifdef DEBUG
+  Serial.begin(115200);   // DEBUG
+  printf_begin();   // DEBUG
+#endif
 
   radioBegin();
 }
@@ -78,12 +88,13 @@ void radioBegin(){
 
 void loop()
 {
-
-//  if(lastRadioReset == 0){   // DEBUG
-//    lastRadioReset = millis();   // DEBUG
-//    while (!Serial);   // DEBUG             // Leonardo: wait for serial monitor
-//    radio.printDetails();   // DEBUG
-//  }   // DEBUG
+  #ifdef DEBUG
+    if(lastRadioReset == 0){   // DEBUG
+      lastRadioReset = millis();   // DEBUG
+      while (!Serial);   // DEBUG             // Leonardo: wait for serial monitor
+      radio.printDetails();   // DEBUG
+    }   // DEBUG
+  #endif
 
   if(numberOfBlinks == 1){
     blink3(1);
@@ -110,7 +121,7 @@ void loop()
   radio.stopListening();                                    // First, stop listening so we can talk.
   if (!radio.write( &fromRudderToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
     radio.startListening();
-//    Serial.println(F("failed rudder"));   // DEBUG
+   DEBUG_PRINTLN(F("failed rudder"));   // DEBUG
   }else{
     readSlaveResponseAndUpdateJoystick();
   }
@@ -120,7 +131,7 @@ void loop()
   radio.stopListening();                                    // First, stop listening so we can talk.
   if (!radio.write( &fromThrottleToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
     radio.startListening();
-//    Serial.println(F("failed throttle"));   // DEBUG
+    DEBUG_PRINTLN(F("failed throttle"));   // DEBUG
   }else{
     readSlaveResponseAndUpdateJoystick();
   }
@@ -131,12 +142,13 @@ void loop()
   }else{
     blink3(0);
   }
-//  Serial.println(F("blink"));   // DEBUG
+  DEBUG_PRINTLN(F("blink"));   // DEBUG
   delay(5);
 }
 
 void readSlaveResponseAndUpdateJoystick(){
-//  Serial.println("read");   // DEBUG
+  DEBUG_PRINTLN(F("readSlaveResponseAndUpdateJoystick"));   // DEBUG
+
   radio.startListening();                                    // Now, continue listening
   unsigned long started_waiting_at = millis();               // Set up a timeout period, get the current microseconds
   boolean timeout = false;                                   // Set up a variable to indicate if a response was received or not
@@ -149,10 +161,10 @@ void readSlaveResponseAndUpdateJoystick(){
   }
 
   if ( timeout ){
-      if (numberOfBlinks == 1){
-        numberOfBlinks = 3;
-      }
-//    Serial.println(F("Failed, response timed out."));   // DEBUG
+    if (numberOfBlinks == 1){
+      numberOfBlinks = 3;
+    }
+    DEBUG_PRINTLN(F("Failed, response timed out."));   // DEBUG
   }else{
     do{
       RadioJoystick buf;
@@ -185,8 +197,8 @@ void readSlaveResponseAndUpdateJoystick(){
         if (numberOfBlinks == 1){
           numberOfBlinks = 6;
         }
-//          Serial.print("Message is not from rudder or not for me: ");   // DEBUG
-//          Serial.println(buf.fromToByte);   // DEBUG
+        DEBUG_PRINT(F("Message is not from rudder or not for me: "));   // DEBUG
+        DEBUG_PRINTLN(buf.fromToByte);   // DEBUG
       }
     }while(radio.available()); // read all the data from FIFO
   }
