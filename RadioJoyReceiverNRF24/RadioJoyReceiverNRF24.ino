@@ -8,24 +8,24 @@
  *
  */
 
-
-//radio debug
 #include <printf.h>
-
 #include <RF24.h>
 #include <Joystick.h>
 #include "RadioJoy.h"
 
-// #define DEBUG
+//#define DEBUG
 #ifdef DEBUG
   #define DEBUG_PRINTLN(x)  Serial.println(x)
   #define DEBUG_PRINT(x)  Serial.print(x)
+  #define JOYSTICK_REPORT_ID_MODIFICATOR 2 // this is to make EdTracker report first so it can be debugged in Ubuntu
 #else
   #define DEBUG_PRINTLN(x)
   #define DEBUG_PRINT(x)
+  #define JOYSTICK_REPORT_ID_MODIFICATOR 0
 #endif
 
 #define LED_PIN 17
+
 boolean blinkState;
 // Timer related so track operations between loop iterations (LED flashing, etc)
 unsigned long lastMillis = 0;
@@ -35,7 +35,7 @@ int blinkDelay=200;
 
 unsigned long lastRadioReset = 0;
 
-Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
+Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID + JOYSTICK_REPORT_ID_MODIFICATOR,
   JOYSTICK_TYPE_JOYSTICK, 12, 0,
   true, true, false, true, true, false,
 //  true, true, true, true, true, true,
@@ -88,13 +88,13 @@ void radioBegin(){
 
 void loop()
 {
-  #ifdef DEBUG
-    if(lastRadioReset == 0){   // DEBUG
-      lastRadioReset = millis();   // DEBUG
-      while (!Serial);   // DEBUG             // Leonardo: wait for serial monitor
-      radio.printDetails();   // DEBUG
-    }   // DEBUG
-  #endif
+  if(lastRadioReset == 0){
+    lastRadioReset = millis();
+    #ifdef DEBUG
+        // while (!Serial);   // DEBUG             // Leonardo: wait for serial monitor
+        radio.printDetails();   // DEBUG
+    #endif
+  }
 
   if(numberOfBlinks == 1){
     blink3(1);
