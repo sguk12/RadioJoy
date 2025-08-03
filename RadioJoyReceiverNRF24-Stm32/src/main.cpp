@@ -10,10 +10,10 @@
 #include <SPI.h>
 #include <RF24.h>
 #include <Joystick.h>
-#include <RotaryEncoder.h>
 #include "RadioJoy.h"
+#include "RotaryEncoderWrapper.h"
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
   HardwareSerial Serial1(PA10, PA9);
@@ -30,10 +30,12 @@
 #endif
 
 #define LED_PIN PC13
+#define NUMBER_OF_BUTTONS 52
 
 // functions declarations
 void radioBegin(void);
 void blink(int);
+void sendInvitationTo(const char*, int8_t);
 void readSlaveResponseAndUpdateJoystick(void);
 void encoder1ISR(void);
 void encoder2ISR(void);
@@ -41,80 +43,59 @@ void encoder3ISR(void);
 void encoder4ISR(void);
 void encoder5ISR(void);
 void encoder6ISR(void);
-struct EncoderDirection {
-  uint8_t colckwise; // 0 means counter clockwise, 1 means clockwise
-  uint8_t buttonValue;
-};
-EncoderDirection deduceEncoderClick(RotaryEncoder);
-
+void readDashboard(void);
 
 unsigned long lastRadioReset = 0;
 
 
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
-  JOYSTICK_TYPE_JOYSTICK, 78, 0,
+  JOYSTICK_TYPE_JOYSTICK, 12, 0,
   true, true, false, true, true, false,
   true, true, false, false, false);
+
+Joystick_ Dashboard(0x04,
+  JOYSTICK_TYPE_JOYSTICK, NUMBER_OF_BUTTONS, 0,
+  false, false, false, false, false, false,
+  false, false, false, false, false);
 
 
 RF24 radio(PA8, PB12); // radio(9, 8) Arduino's pins connected to CE,CS pins on NRF24L01
 
 #define ENC1A PA0
 #define ENC1B PA1
-int16_t positionEncoder1 = 0;
-// A pointer to the dynamic created rotary encoder instance.
-// This will be done in setup()
-RotaryEncoder *encoder1 = nullptr;
+
+
+RotaryEncoderWrapper encoderWrapper1(ENC1A, ENC1B, RotaryEncoder::LatchMode::TWO03);
 
 void setup()
 {
   DEBUG_BEGIN(115200);
   pinMode(LED_PIN, OUTPUT);
 
-  // setup the rotary encoder functionality
-  // use FOUR3 mode when PIN_IN1, PIN_IN2 signals are always HIGH in latch position.
-  // use FOUR0 mode when PIN_IN1, PIN_IN2 signals are always LOW in latch position.
-  // use TWO03 mode when PIN_IN1, PIN_IN2 signals are both LOW or HIGH in latch position.
-  encoder1 = new RotaryEncoder(ENC1A, ENC1B, RotaryEncoder::LatchMode::TWO03);
+  // Initialize encoder wrapper
+  encoderWrapper1.reset();
   // register interrupt routine
   attachInterrupt(digitalPinToInterrupt(ENC1A), encoder1ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(ENC1B), encoder1ISR, CHANGE);
 
-  USB_Begin();
-
-  Joystick.setXAxisRange(0, 1023);
-  Joystick.setYAxisRange(0, 1023);
-  Joystick.setRxAxisRange(0, 1023);
-  Joystick.setRyAxisRange(0, 1023);
-  Joystick.setThrottleRange(0, 1023);
-  Joystick.setRudderRange(0, 255);
+  
+  Joystick.setRudderRange(0, 255); //default axis min..max is 0..1023
   Joystick.begin(false);
-
+  Dashboard.begin(false);
+  USB_Begin();
+  
   // we are using SPI 2 because all pins of this SPI are 5v tolerable
   SPI.setMOSI(PB15);
   SPI.setMISO(PB14);
   SPI.setSCLK(PB13);
   SPI.begin();
-
+  
   radioBegin();
 }
 
 void loop()
 {
-  // DEBUG_PRINTLN("Loop");   // DEBUG
-    static int pos = 0;
-
-  encoder1->tick(); // just call tick() to check the state.
-
-  long newPos = encoder1->getPosition();
-  if (pos != newPos) {
-    Serial1.print("pos:");
-    Serial1.print(newPos);
-    Serial1.print(" dir:");
-    Serial1.println((int)(encoder1->getDirection()));
-    pos = newPos;
-  } // if
-
+  DEBUG_PRINTLN("Loop");   // DEBUG
   digitalWrite(LED_PIN, HIGH); //High means led is off
   if(lastRadioReset == 0){
     lastRadioReset = millis();
@@ -123,49 +104,39 @@ void loop()
     #endif
   }
 
-  // Send an invitation to the edtracker slave
-  radio.stopListening();                                    // First, stop listening so we can talk.
-  if (!radio.write( &fromEdTrackerToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
-    DEBUG_PRINTLN("Failed Ed tracker");   // DEBUG
-    radio.startListening();
-    if(lastRadioReset + 1000 < millis()){
-      radioBegin();
-      lastRadioReset = millis();
-    }
-  }else{
-    // DEBUG_PRINT("Ed tracker ");   // DEBUG
-    readSlaveResponseAndUpdateJoystick();
-  }
+  sendInvitationTo((char*)"rudder", fromRudderToReceiver);
+  sendInvitationTo((char*)"throttle", fromThrottleToReceiver);
 
-  delay(5);
-
-  // Send an invitation to the rudder slave
-  radio.stopListening();                                    // First, stop listening so we can talk.
-  if (!radio.write( &fromRudderToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
-    radio.startListening();
-   DEBUG_PRINTLN(F("failed rudder"));   // DEBUG
-  }else{
-  //  DEBUG_PRINT(F("rudder   "));   // DEBUG
-    readSlaveResponseAndUpdateJoystick();
-  }
-  delay(5);
-
-  // Send an invitation to the throttle slave
-  radio.stopListening();                                    // First, stop listening so we can talk.
-  if (!radio.write( &fromThrottleToReceiver, sizeof(int8_t), 1 )){ // This will block until complete
-    radio.startListening();
-    DEBUG_PRINTLN(F("failed throttle"));   // DEBUG
-  }else{
-    // DEBUG_PRINT(F("throttle "));   // DEBUG
-    readSlaveResponseAndUpdateJoystick();
-  }
   Joystick.sendState();
+  
+  readDashboard();
+  Dashboard.sendState();
 
   delay(5);
 }
 
+void sendInvitationTo(const char* name, int8_t slave) {
+  // TODO: uncomment the below method when switching to STM32 joystik/radio master
+  //
+  // radio.stopListening();                                    // First, stop listening so we can talk.
+  // if (!radio.write( &slave, sizeof(int8_t), 1 )){ // This will block until complete
+  //   DEBUG_PRINT(name);   // DEBUG
+  //   DEBUG_PRINTLN(" failed");   // DEBUG
+  //   radio.startListening();
+  //   if(lastRadioReset + 1000 < millis()){
+  //     radioBegin();
+  //     lastRadioReset = millis();
+  //   }
+  // }else{
+  //   DEBUG_PRINT(name);   // DEBUG
+  //   DEBUG_PRINT(" ");   // DEBUG
+  //   readSlaveResponseAndUpdateJoystick();
+  // }
+  delay(5);
+}
+
 void readSlaveResponseAndUpdateJoystick(){
-  // DEBUG_PRINT(F("readSlaveResponseAndUpdateJoystick "));   // DEBUG
+  DEBUG_PRINT(F("readSlaveResponseAndUpdateJoystick "));   // DEBUG
 
   radio.startListening();                                    // Now, continue listening
   unsigned long started_waiting_at = millis();               // Set up a timeout period, get the current microseconds
@@ -179,7 +150,7 @@ void readSlaveResponseAndUpdateJoystick(){
   }
 
   if ( timeout ){
-    // DEBUG_PRINTLN(F("\t----- timed out."));   // DEBUG
+    DEBUG_PRINTLN(F("\t----- timed out."));   // DEBUG
   }else{
     do{
       RadioJoystick buf;
@@ -208,8 +179,6 @@ void readSlaveResponseAndUpdateJoystick(){
       }
     }while(radio.available()); // read all the data from FIFO
   }
-  // EncoderDirection ed = deduceEncoderClick(encoder1);
-  // Joystick.setButton(12 + ed.colckwise, ed.buttonValue);
 }
 
 void radioBegin(){
@@ -238,23 +207,22 @@ void blink(int delayInterval)
 }
 
 void encoder1ISR(){
-  encoder1->tick();
+  encoderWrapper1.tick();
 }
-EncoderDirection deduceEncoderClick(RotaryEncoder encoder) {
-  EncoderDirection ed;
-  int16_t position = encoder.getPosition();
-  DEBUG_PRINT(F("Encoder position: "));   // DEBUG
-  DEBUG_PRINTLN(position);   // DEBUG
-  // encoder.setPosition(0);
-  if (position == 0) {
-    ed.buttonValue = 0;
-    ed.colckwise = 0;
-  } else if ( position > 0 ) {
-    ed.buttonValue = 1;
-    ed.colckwise = 1;
-  } else {
-    ed.buttonValue = 1;
-    ed.colckwise = 0;
+
+void readDashboard() {
+  for(uint8_t i=0; i < NUMBER_OF_BUTTONS; i++){
+    Dashboard.setButton(i, 0);
   }
-  return ed;
+
+  // Update encoder state - this processes one tick at a time
+  encoderWrapper1.update();
+  
+  // Set button states - these will alternate between UP/DOWN for each tick
+  Dashboard.setButton(0, encoderWrapper1.getButtonCCW());  // CCW button
+  Dashboard.setButton(1, encoderWrapper1.getButtonCW());   // CW button
+  DEBUG_PRINT("CW Button state: ");
+  DEBUG_PRINTLN(encoderWrapper1.getButtonCW());
+  DEBUG_PRINT("CCW Button state: ");
+  DEBUG_PRINTLN(encoderWrapper1.getButtonCCW());
 }
