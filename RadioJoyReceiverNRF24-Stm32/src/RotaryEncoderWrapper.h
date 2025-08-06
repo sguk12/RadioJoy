@@ -79,7 +79,6 @@ public:
         if (encoderPosition == reportedPosition) {
             buttonCWState = BUTTON_UP;
             buttonCCWState = BUTTON_UP;
-            return true;
         }
         return false;
     }

@@ -7,13 +7,15 @@
  *
  */
 #include <Arduino.h>
+#include <Wire.h>
+#include <PCF8574.h>
 #include <SPI.h>
 #include <RF24.h>
 #include <Joystick.h>
 #include "RadioJoy.h"
 #include "RotaryEncoderWrapper.h"
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
   HardwareSerial Serial1(PA10, PA9);
@@ -37,6 +39,7 @@ void radioBegin(void);
 void blink(int);
 void sendInvitationTo(const char*, int8_t);
 void readSlaveResponseAndUpdateJoystick(void);
+void scanButtonMatrix(void);
 void encoder1ISR(void);
 void encoder2ISR(void);
 void encoder3ISR(void);
@@ -60,6 +63,9 @@ Joystick_ Dashboard(0x04,
 
 
 RF24 radio(PA8, PB12); // radio(9, 8) Arduino's pins connected to CE,CS pins on NRF24L01
+PCF8574 pcf20(0x20);
+PCF8574 pcf21(0x21);
+TwoWire WIRE(PB9,PB8);
 
 #define ENC1A PA0
 #define ENC1B PA1
@@ -91,6 +97,9 @@ void setup()
   SPI.begin();
   
   radioBegin();
+  WIRE.begin();
+  pcf20.begin();
+  pcf21.begin();
 }
 
 void loop()
@@ -225,4 +234,42 @@ void readDashboard() {
   DEBUG_PRINTLN(encoderWrapper1.getButtonCW());
   DEBUG_PRINT("CCW Button state: ");
   DEBUG_PRINTLN(encoderWrapper1.getButtonCCW());
+
+  scanButtonMatrix();
+}
+
+void processButtonStates(uint8_t column, uint8_t rowStates) {
+  for (uint8_t row = 0; row < 8; row++) {
+    if (!(rowStates & (1 << row))) {  // Button pressed (assuming active low)
+      uint8_t buttonIndex = column * 8 + row;
+      DEBUG_PRINT("Button pressed: ");
+      DEBUG_PRINT(buttonIndex);
+      DEBUG_PRINT(" (Col: ");
+      DEBUG_PRINT(column);
+      DEBUG_PRINT(", Row: ");
+      DEBUG_PRINT(row);
+      DEBUG_PRINTLN(")");
+      
+      // Handle button press
+      //handleButtonPress(buttonIndex);
+    }
+  }
+}
+
+void scanButtonMatrix() {
+  for (uint8_t col = 0; col < 8; col++) {
+    uint8_t columnMask = ~(1 << col);  // Creates the inverted bit pattern
+    
+    pcf20.write8(columnMask);
+    byte inputStates = pcf21.readButton8();
+    
+    DEBUG_PRINT("Column ");
+    DEBUG_PRINT(col);
+    DEBUG_PRINT(" Button state: ");
+#ifdef DEBUG
+    Serial1.println(inputStates, BIN);
+#endif
+    
+    processButtonStates(col, inputStates);
+  }
 }
