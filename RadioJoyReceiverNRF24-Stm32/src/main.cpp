@@ -8,7 +8,6 @@
  */
 #include <Arduino.h>
 #include <Wire.h>
-#include <PCF8574.h>
 #include <SPI.h>
 #include <RF24.h>
 #include <Joystick.h>
@@ -63,8 +62,9 @@ Joystick_ Dashboard(0x04,
 
 
 RF24 radio(PA8, PB12); // radio(9, 8) Arduino's pins connected to CE,CS pins on NRF24L01
-PCF8574 pcf20(0x20);
-PCF8574 pcf21(0x21);
+
+#define PCF8574_OUT 0X20
+#define PCF8574_IN 0X21
 TwoWire WIRE(PB9,PB8);
 
 #define ENC1A PA0
@@ -98,8 +98,6 @@ void setup()
   
   radioBegin();
   WIRE.begin();
-  pcf20.begin();
-  pcf21.begin();
 }
 
 void loop()
@@ -260,9 +258,20 @@ void scanButtonMatrix() {
   for (uint8_t col = 0; col < 8; col++) {
     uint8_t columnMask = ~(1 << col);  // Creates the inverted bit pattern
     
-    pcf20.write8(columnMask);
-    byte inputStates = pcf21.readButton8();
-    
+    WIRE.beginTransmission(PCF8574_OUT); // transmit to device PCF8574_OUT
+    WIRE.write(columnMask); // sends one byte  
+    WIRE.endTransmission(); // stop transmitting
+
+    WIRE.requestFrom(PCF8574_IN, 1); // request from device PCF8574_IN one byte
+    uint8_t inputStates = 0xFF;
+    if (WIRE.available())
+      inputStates = WIRE.read(); // sends one byte  
+
+    DEBUG_PRINT("Column mask: ");
+#ifdef DEBUG
+    Serial1.print(columnMask, BIN);
+    Serial1.print(" ");
+#endif
     DEBUG_PRINT("Column ");
     DEBUG_PRINT(col);
     DEBUG_PRINT(" Button state: ");
