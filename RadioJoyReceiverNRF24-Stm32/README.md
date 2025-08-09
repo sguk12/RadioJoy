@@ -27,23 +27,22 @@ PB8, PB9, GND, +5V                 4 way header if using a separate breadboard
 
 ## Encoders
 6 encoders, 5 of them with push buttons.
-Wave '~' means external interruption required:
+12 way hwader, buttons are connected into the matrix above
+All pins need external interruption attached:
 ```
-PB7~,   PB6      GND                3 ways header
-PB5~,   PB4                         2 ways header
-PB3~,   PA15                        2 ways header
-PA10~,  PA9                         2 ways header
-PB11~,  PB10                        2 ways header
-PB1~,   PB0                         2 ways header
+PB7,   PB6
+PB5,   PB4
+PB3,   PA15
+PB11,  PB10
+PB1,   PB0
+PA7,   PA6
 ```
-
-or 10 ways header + 3 ways header
 
 ## Radio
 nRF24L01(+) 2.4GHz Wireless Transceiver
-The radio chip needs too much power for 3.3v power source on the controller, so the radio needs to be powered from the 5v. So we have to use the only 5v tolerable SPI, SPI2.
-```
+The radio chip needs too much power for 3.3v power source on the controller, so the radio needs to be powered from the 5v. So we have to use the only 5v tolerable SPI port, which is SPI2.
 7 ways header:
+```
 PB12 -->  CS
 PB13 -->  SCK
 PB14 -->  MISO
