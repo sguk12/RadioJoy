@@ -383,7 +383,7 @@ void mapRawButtonsToDashboardButtonArray() {
   // encoder buttons are row 4
 
   uint8_t singleSwitchPosition = getSwitchPosition(rawButtonMatrix[0][6], rawButtonMatrix[1][6], rawButtonMatrix[2][6], rawButtonMatrix[3][6], rawButtonMatrix[4][6]);
-  for (uint8_t slot = 0; slot < 7; slot++) {
+  for (uint8_t slot = 0; slot < 6; slot++) {
     if (slot == singleSwitchPosition) {
       encoderWrapper2.update();
       // Set button states - these will alternate between UP/DOWN for each tick
@@ -402,8 +402,8 @@ void mapRawButtonsToDashboardButtonArray() {
   }
 
   uint8_t fourSwitchPosition = getSwitchPosition(rawButtonMatrix[0][5], rawButtonMatrix[1][5], rawButtonMatrix[2][5], rawButtonMatrix[3][5], rawButtonMatrix[4][5]);
-  for (uint8_t slot = 0; slot < 7; slot++) {
-    if (slot == singleSwitchPosition) {
+  for (uint8_t slot = 0; slot < 6; slot++) {
+    if (slot == fourSwitchPosition) {
       encoderWrapper3.update();
       // Set button states - these will alternate between UP/DOWN for each tick
       Dashboard.setButton(i++, encoderWrapper3.getButtonCCW());  // CCW button
