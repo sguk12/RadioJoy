@@ -28,11 +28,11 @@ struct __attribute__((packed)) RadioJoystick {
  */
 const int8_t receiverId = B00010000;
 const int8_t rudderId = B00000001;
-const int8_t throttleId = B00000010;
-const int8_t edTrackerId = B00000011;
+const int8_t joystickId = B00000010;
+const int8_t throttleId = B00000011;
 const int8_t fromRudderToReceiver = receiverId | rudderId;
+const int8_t fromJoystickToReceiver = receiverId | joystickId;
 const int8_t fromThrottleToReceiver = receiverId | throttleId;
-const int8_t fromEdTrackerToReceiver = receiverId | edTrackerId;
 
 byte RECEIVER_ADDRESS[6] = "1_Joy";
 byte TRANSMITTER_ADDRESS[6] = "2_Joy";

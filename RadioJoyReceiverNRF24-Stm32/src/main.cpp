@@ -53,7 +53,7 @@ unsigned long lastRadioReset = 0;
 
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
   JOYSTICK_TYPE_JOYSTICK, 12, 0,
-  true, true, false, true, true, false,
+  true, true, true, true, true, false,
   true, true, false, false, false);
 
 Joystick_ Dashboard(0x04,
@@ -96,6 +96,7 @@ void setup()
 {
   DEBUG_BEGIN(115200);
   pinMode(LED_PIN, OUTPUT);
+  pinMode(PA5, INPUT_ANALOG);
 
   // register interrupt routine
   // the first encoder is going to be polled becasuse of the EXTI6,7 overlap
@@ -132,6 +133,9 @@ void loop()
 {
   DEBUG_PRINTLN("Loop");   // DEBUG
   digitalWrite(LED_PIN, HIGH); //High means led is off
+  
+  encoderWrapper1.tick(); // manual polling of the first encoder
+
   if(lastRadioReset == 0){
     lastRadioReset = millis();
     #ifdef DEBUG
@@ -140,7 +144,11 @@ void loop()
   }
 
   sendInvitationTo((char*)"rudder", fromRudderToReceiver);
+  sendInvitationTo((char*)"joystick", fromJoystickToReceiver);
   sendInvitationTo((char*)"throttle", fromThrottleToReceiver);
+
+  int16_t analogIn = analogRead(PA5);
+  Joystick.setZAxis(analogIn);
 
   Joystick.sendState();
   
@@ -151,20 +159,21 @@ void loop()
 }
 
 void sendInvitationTo(const char* name, int8_t slave) {
-  // radio.stopListening();                                    // First, stop listening so we can talk.
-  // if (!radio.write( &slave, sizeof(int8_t), 1 )){ // This will block until complete
-  //   DEBUG_PRINT(name);   // DEBUG
-  //   DEBUG_PRINTLN(" failed");   // DEBUG
-  //   radio.startListening();
-  //   if(lastRadioReset + 1000 < millis()){
-  //     radioBegin();
-  //     lastRadioReset = millis();
-  //   }
-  // }else{
-  //   DEBUG_PRINT(name);   // DEBUG
-  //   DEBUG_PRINT(" ");   // DEBUG
-  //   readSlaveResponseAndUpdateJoystick();
-  // }
+  radio.stopListening();                                    // First, stop listening so we can talk.
+  if (!radio.write( &slave, sizeof(int8_t), 1 )){ // This will block until complete
+    DEBUG_PRINT(name); DEBUG_PRINTLN(" failed");   // DEBUG
+    radio.startListening();
+    if(lastRadioReset + 1000 < millis()){
+      radioBegin();
+      lastRadioReset = millis();
+    }
+  }else{
+    DEBUG_PRINT(name); DEBUG_PRINT(" ");   // DEBUG
+    readSlaveResponseAndUpdateJoystick();
+  }
+  
+  encoderWrapper1.tick(); // manual polling of the first encoder
+
   delay(5);
 }
 
@@ -191,9 +200,9 @@ void readSlaveResponseAndUpdateJoystick(){
       if (buf.fromToByte == fromRudderToReceiver){
         // Message with a good checksum received.
         Joystick.setRudder(buf.axisRudder);
-        blink(10);
+        blink(5);
         DEBUG_PRINTLN(F("Rudder recieved."));   // DEBUG
-      } else if (buf.fromToByte == fromThrottleToReceiver) {
+      } else if (buf.fromToByte == fromJoystickToReceiver) {
         // Message with a good checksum received.
         Joystick.setXAxis(buf.axisX);
         Joystick.setYAxis(buf.axisY);
@@ -204,11 +213,17 @@ void readSlaveResponseAndUpdateJoystick(){
           // assign the i-th bit of the buf.buttons
           Joystick.setButton(i, bitRead(buf.buttons, i));
         }
+        DEBUG_PRINTLN(F("Joystick recieved."));   // DEBUG
+        blink(5);
+      } else if (buf.fromToByte == fromThrottleToReceiver) {
+        // Message with a good checksum received.
+        Joystick.setThrottle(buf.axisThrottle);
+        Joystick.setRxAxis(buf.axisPropellor);
+        Joystick.setRyAxis(buf.axisTrim);
         DEBUG_PRINTLN(F("Throttle recieved."));   // DEBUG
-        blink(10);
+        blink(5);
       } else{
-        DEBUG_PRINT(F("Message is not from rudder or not for me: "));   // DEBUG
-        DEBUG_PRINTLN(buf.fromToByte);   // DEBUG
+        DEBUG_PRINT(F("Message is not from rudder or not for me: ")); DEBUG_PRINTLN(buf.fromToByte);   // DEBUG
       }
     }while(radio.available()); // read all the data from FIFO
   }
@@ -258,14 +273,8 @@ void encoder6ISR(){
 }
 
 void printEncoderState(uint8_t i, RotaryEncoderWrapper encoder) {
-  DEBUG_PRINT("Encoder");
-  DEBUG_PRINT(i);
-  DEBUG_PRINT(" CW Button state: ");
-  DEBUG_PRINTLN(encoder.getButtonCW());
-  DEBUG_PRINT("Encoder");
-  DEBUG_PRINT(i);
-  DEBUG_PRINT(" CCW Button state: ");
-  DEBUG_PRINTLN(encoder.getButtonCCW());
+  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" CW Button state: "); DEBUG_PRINTLN(encoder.getButtonCW());
+  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" CCW Button state: "); DEBUG_PRINTLN(encoder.getButtonCCW());
 }
 
 void readDashboard() {
@@ -317,14 +326,9 @@ void processButtonStates(uint8_t column, uint8_t rowStates) {
     } else {
       rawButtonMatrix[column][rawButtonMatrixRow] = !(rowStates & (1 << row));
     }
-    if (rawButtonMatrix[column][rawButtonMatrixRow]) {
-      DEBUG_PRINT("Button pressed: ");
-      DEBUG_PRINT(" (Col: ");
-      DEBUG_PRINT(column);
-      DEBUG_PRINT(", Row: ");
-      DEBUG_PRINT(row);
-      DEBUG_PRINTLN(")");
-    }
+    // if (rawButtonMatrix[column][rawButtonMatrixRow]) {
+    //   DEBUG_PRINT("Button pressed: "); DEBUG_PRINT(" (Col: "); DEBUG_PRINT(column); DEBUG_PRINT(", Row: "); DEBUG_PRINT(row); DEBUG_PRINTLN(")");
+    // }
   }
 }
 
