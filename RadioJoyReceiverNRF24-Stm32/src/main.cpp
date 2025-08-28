@@ -82,12 +82,12 @@ TwoWire WIRE(PB9,PB8);
 #define ENC6B PB3  //EXTI3
 
 
-RotaryEncoderWrapper encoderWrapper1(ENC1A, ENC1B, RotaryEncoder::LatchMode::TWO03);
-RotaryEncoderWrapper encoderWrapper2(ENC2A, ENC2B, RotaryEncoder::LatchMode::TWO03);
-RotaryEncoderWrapper encoderWrapper3(ENC3A, ENC3B, RotaryEncoder::LatchMode::TWO03);
-RotaryEncoderWrapper encoderWrapper4(ENC4A, ENC4B, RotaryEncoder::LatchMode::TWO03);
-RotaryEncoderWrapper encoderWrapper5(ENC5A, ENC5B, RotaryEncoder::LatchMode::TWO03);
-RotaryEncoderWrapper encoderWrapper6(ENC6A, ENC6B, RotaryEncoder::LatchMode::TWO03);
+RotaryEncoderWrapper encoderWrapper1(ENC1A, ENC1B, RotaryEncoder::LatchMode::TWO03, false);
+RotaryEncoderWrapper encoderWrapper2(ENC2A, ENC2B);
+RotaryEncoderWrapper encoderWrapper3(ENC3A, ENC3B);
+RotaryEncoderWrapper encoderWrapper4(ENC4A, ENC4B);
+RotaryEncoderWrapper encoderWrapper5(ENC5A, ENC5B);
+RotaryEncoderWrapper encoderWrapper6(ENC6A, ENC6B);
 uint8_t pastSingleSwitchPosition = 0;
 uint8_t pastFourSwitchPosition = 0;
 uint8_t rawButtonMatrix[5][7];
@@ -273,8 +273,9 @@ void encoder6ISR(){
 }
 
 void printEncoderState(uint8_t i, RotaryEncoderWrapper encoder) {
-  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" CW Button state: "); DEBUG_PRINTLN(encoder.getButtonCW());
-  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" CCW Button state: "); DEBUG_PRINTLN(encoder.getButtonCCW());
+  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" position: "); DEBUG_PRINTLN(encoder.getPosition());
+  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" Button state  CW: "); DEBUG_PRINT(encoder.getButtonCW());
+  DEBUG_PRINT(" CCW: "); DEBUG_PRINTLN(encoder.getButtonCCW());
 }
 
 void readDashboard() {
@@ -378,6 +379,7 @@ void mapRawButtonsToDashboardButtonArray() {
   // the first encoder is not modified with the switches
   encoderWrapper1.tick(); // polling the first encoder, while the other encoders work via interruptions
   encoderWrapper1.update();
+  // printEncoderState(1, encoderWrapper1);
   // Set button states - these will alternate between UP/DOWN for each tick
   Dashboard.setButton(i++, encoderWrapper1.getButtonCCW());  // CCW button
   Dashboard.setButton(i++, encoderWrapper1.getButtonCW());   // CW button
