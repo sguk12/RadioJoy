@@ -24,14 +24,26 @@
   #define DEBUG_BEGIN(x) Serial1.begin(x)
   #define DEBUG_PRINTLN(x)  Serial1.println(x)
   #define DEBUG_PRINT(x)  Serial1.print(x)
+  // the below is to disable the every loop printouts and use the targeted printouts with DEBUG2_PRINT()
+  // #define DEBUG_PRINTLN(x)
+  // #define DEBUG_PRINT(x)
+  #define DEBUG2_PRINTLN(x)  Serial1.println(x)
+  #define DEBUG2_PRINT(x)  Serial1.print(x)
 #else
   #define DEBUG_BEGIN(x)
   #define DEBUG_PRINTLN(x)
   #define DEBUG_PRINT(x)
+  #define DEBUG2_PRINT(x)
+  #define DEBUG2_PRINTLN(x)
 #endif
 
 #define LED_PIN PC13
-#define NUMBER_OF_BUTTONS 112 // 20 pushbuttons + 5 encoder buttons * 6 switch positions + 5 encoders * 2 rotation directions * 6 switch positions + 1 unmodifiable encoder * 2 rotation dir = 20 + 5 * 6 + 5 * 2 * 6 + 2
+#define NUMBER_OF_JOYSTICK_BUTTONS 12
+// 20 pushbuttons + 5 encoder buttons * 6 switch positions + 5 encoders * 2 rotation directions * 6 switch positions + 1 unmodifiable encoder * 2 rotation dir 
+// + 12 buttons from the Joystick (MSFS2024 bug: button 2 on the Joystick and button 2 on the Dashboard are the same button in MSFS2024)
+// = 20 + 5 * 6 + 5 * 2 * 6 + 2 + 12
+#define NUMBER_OF_BUTTONS 112 + NUMBER_OF_JOYSTICK_BUTTONS
+
 
 // functions declarations
 void radioBegin(void);
@@ -53,12 +65,12 @@ unsigned long lastRadioReset = 0;
 
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
   JOYSTICK_TYPE_JOYSTICK, 12, 0,
-  true, true, true, true, true, false,
+  true, true, false, true, true, false,
   true, true, false, false, false);
 
 Joystick_ Dashboard(0x04,
   JOYSTICK_TYPE_JOYSTICK, NUMBER_OF_BUTTONS, 0,
-  false, false, false, false, false, false,
+  false, false, true, false, false, false,
   false, false, false, false, false);
 
 
@@ -82,15 +94,16 @@ TwoWire WIRE(PB9,PB8);
 #define ENC6B PB3  //EXTI3
 
 
-RotaryEncoderWrapper encoderWrapper1(ENC1A, ENC1B, RotaryEncoder::LatchMode::TWO03, false);
-RotaryEncoderWrapper encoderWrapper2(ENC2A, ENC2B);
-RotaryEncoderWrapper encoderWrapper3(ENC3A, ENC3B);
-RotaryEncoderWrapper encoderWrapper4(ENC4A, ENC4B);
-RotaryEncoderWrapper encoderWrapper5(ENC5A, ENC5B);
-RotaryEncoderWrapper encoderWrapper6(ENC6A, ENC6B);
+RotaryEncoderWrapper encoderWrapper1(ENC1A, ENC1B, RotaryEncoder::LatchMode::TWO03);
+RotaryEncoderWrapper encoderWrapper2(ENC2A, ENC2B, RotaryEncoder::LatchMode::FOUR3);
+RotaryEncoderWrapper encoderWrapper3(ENC3A, ENC3B, RotaryEncoder::LatchMode::FOUR3);
+RotaryEncoderWrapper encoderWrapper4(ENC4A, ENC4B, RotaryEncoder::LatchMode::FOUR3);
+RotaryEncoderWrapper encoderWrapper5(ENC5A, ENC5B, RotaryEncoder::LatchMode::FOUR3);
+RotaryEncoderWrapper encoderWrapper6(ENC6A, ENC6B, RotaryEncoder::LatchMode::FOUR3);
 uint8_t pastSingleSwitchPosition = 0;
 uint8_t pastFourSwitchPosition = 0;
 uint8_t rawButtonMatrix[5][7];
+uint8_t joystickButtons[NUMBER_OF_JOYSTICK_BUTTONS];
 
 void setup()
 {
@@ -146,9 +159,6 @@ void loop()
   sendInvitationTo((char*)"rudder", fromRudderToReceiver);
   sendInvitationTo((char*)"joystick", fromJoystickToReceiver);
   sendInvitationTo((char*)"throttle", fromThrottleToReceiver);
-
-  int16_t analogIn = analogRead(PA5);
-  Joystick.setZAxis(analogIn);
 
   Joystick.sendState();
   
@@ -209,10 +219,13 @@ void readSlaveResponseAndUpdateJoystick(){
         Joystick.setThrottle(buf.axisThrottle);
         Joystick.setRxAxis(buf.axisPropellor);
         Joystick.setRyAxis(buf.axisTrim);
-        for(uint8_t i=0; i < 12; i++){
+        for(uint8_t i=0; i < NUMBER_OF_JOYSTICK_BUTTONS; i++){
           // assign the i-th bit of the buf.buttons
-          Joystick.setButton(i, bitRead(buf.buttons, i));
+          joystickButtons[i] = bitRead(buf.buttons, i);
+          // TODO: This is workaround for the MSFS2O24 mixing up the buttons from the two joysticks with the same name
+          // Joystick.setButton(i, joystickButtons[i]);
         }
+        Joystick.setButton(0, joystickButtons[1]); // there is no button 0 on the Dashboard, so no overlap confusing MSFS2024
         DEBUG_PRINTLN(F("Joystick recieved."));   // DEBUG
         blink(5);
       } else if (buf.fromToByte == fromThrottleToReceiver) {
@@ -273,12 +286,16 @@ void encoder6ISR(){
 }
 
 void printEncoderState(uint8_t i, RotaryEncoderWrapper encoder) {
-  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" position: "); DEBUG_PRINTLN(encoder.getPosition());
-  DEBUG_PRINT("Encoder"); DEBUG_PRINT(i); DEBUG_PRINT(" Button state  CW: "); DEBUG_PRINT(encoder.getButtonCW());
-  DEBUG_PRINT(" CCW: "); DEBUG_PRINTLN(encoder.getButtonCCW());
+  DEBUG2_PRINT("Encoder"); DEBUG2_PRINT(i); DEBUG2_PRINT(" position: "); DEBUG2_PRINT(encoder.getPosition());
+  DEBUG2_PRINT(" reported position: "); DEBUG2_PRINTLN(encoder.getReportedPosition());
+  DEBUG2_PRINT("Encoder"); DEBUG2_PRINT(i); DEBUG2_PRINT(" Button state  CW: "); DEBUG2_PRINT(encoder.getButtonCW());
+  DEBUG2_PRINT(" CCW: "); DEBUG2_PRINTLN(encoder.getButtonCCW());
 }
 
 void readDashboard() {
+  int16_t analogIn = analogRead(PA5);
+  Dashboard.setZAxis(analogIn);
+
   scanButtonMatrix();
   mapRawButtonsToDashboardButtonArray();
 }
@@ -378,8 +395,8 @@ void mapRawButtonsToDashboardButtonArray() {
 
   // the first encoder is not modified with the switches
   encoderWrapper1.tick(); // polling the first encoder, while the other encoders work via interruptions
+  // if (encoderWrapper1.update()) {printEncoderState(1, encoderWrapper1);}
   encoderWrapper1.update();
-  // printEncoderState(1, encoderWrapper1);
   // Set button states - these will alternate between UP/DOWN for each tick
   Dashboard.setButton(i++, encoderWrapper1.getButtonCCW());  // CCW button
   Dashboard.setButton(i++, encoderWrapper1.getButtonCW());   // CW button
@@ -391,15 +408,14 @@ void mapRawButtonsToDashboardButtonArray() {
   uint8_t singleSwitchPosition = getSwitchPosition(rawButtonMatrix[0][6], rawButtonMatrix[1][6], rawButtonMatrix[2][6], rawButtonMatrix[3][6], rawButtonMatrix[4][6]);
   for (uint8_t slot = 0; slot < 6; slot++) {
     if (slot == singleSwitchPosition) {
+      // if (encoderWrapper2.update()) {printEncoderState(2, encoderWrapper2);}
       encoderWrapper2.update();
       // Set button states - these will alternate between UP/DOWN for each tick
       Dashboard.setButton(i++, encoderWrapper2.getButtonCCW());  // CCW button
       Dashboard.setButton(i++, encoderWrapper2.getButtonCW());   // CW button
       Dashboard.setButton(i++, rawButtonMatrix[0][4]); // the 'single' encoder's pushbutton
     } else {
-      Dashboard.setButton(i++, 0);  // CCW button
-      Dashboard.setButton(i++, 0);   // CW button
-      Dashboard.setButton(i++, 0);   // push button
+      i += 3; // skip 3 buttons/button positions because all buttons have already been set to 0 in the first line of this function
     }
   }
   if (pastSingleSwitchPosition != singleSwitchPosition) {
@@ -428,29 +444,20 @@ void mapRawButtonsToDashboardButtonArray() {
       Dashboard.setButton(i++, encoderWrapper5.getButtonCW());   // CW button
       Dashboard.setButton(i++, rawButtonMatrix[3][4]); // the encoder's pushbutton
 
+      // if (encoderWrapper6.update()) {printEncoderState(6, encoderWrapper6);}
       encoderWrapper6.update();
       // Set button states - these will alternate between UP/DOWN for each tick
       Dashboard.setButton(i++, encoderWrapper6.getButtonCCW());  // CCW button
       Dashboard.setButton(i++, encoderWrapper6.getButtonCW());   // CW button
       Dashboard.setButton(i++, rawButtonMatrix[4][4]); // the encoder's pushbutton
     } else {
-      Dashboard.setButton(i++, 0);  // CCW button
-      Dashboard.setButton(i++, 0);   // CW button
-      Dashboard.setButton(i++, 0);   // push button
-
-      Dashboard.setButton(i++, 0);  // CCW button
-      Dashboard.setButton(i++, 0);   // CW button
-      Dashboard.setButton(i++, 0);   // push button
-
-      Dashboard.setButton(i++, 0);  // CCW button
-      Dashboard.setButton(i++, 0);   // CW button
-      Dashboard.setButton(i++, 0);   // push button
-
-      Dashboard.setButton(i++, 0);  // CCW button
-      Dashboard.setButton(i++, 0);   // CW button
-      Dashboard.setButton(i++, 0);   // push button
+      i += 12; // skip 12 buttons/button positions because all buttons have already been set to 0 in the first line of this function
     }
   }
+  for (uint8_t j = 0; j < NUMBER_OF_JOYSTICK_BUTTONS; j++) {
+    Dashboard.setButton(i++, joystickButtons[j]);
+  }
+  
   if (pastFourSwitchPosition != fourSwitchPosition) {
     encoderWrapper3.reset();
     encoderWrapper4.reset();

@@ -15,17 +15,15 @@ private:
     uint8_t buttonCCWState;
     uint8_t buttonCWState;
     bool ownsEncoder;
-    bool reportOnlyOddPositions;
 
 public:
     // Constructor that creates a new encoder
     // use FOUR3 mode when PIN_IN1, PIN_IN2 signals are always HIGH in latch position.
     // use FOUR0 mode when PIN_IN1, PIN_IN2 signals are always LOW in latch position.
     // use TWO03 mode when PIN_IN1, PIN_IN2 signals are both LOW or HIGH in latch position.
-    RotaryEncoderWrapper(int pinA, int pinB, RotaryEncoder::LatchMode mode = RotaryEncoder::LatchMode::TWO03, bool onlyOddPositions = true)
+    RotaryEncoderWrapper(int pinA, int pinB, RotaryEncoder::LatchMode mode)
         : reportedPosition(0), encoderPosition(0), buttonCCWState(BUTTON_UP), buttonCWState(BUTTON_UP), ownsEncoder(true) {
         encoder = new RotaryEncoder(pinA, pinB, mode);
-        reportOnlyOddPositions = onlyOddPositions;
     }
     
     // Constructor that wraps an existing encoder
@@ -67,9 +65,6 @@ public:
             buttonCWState = nextButtonState(buttonCWState);
             if (buttonCWState == BUTTON_DOWN){
                 reportedPosition++;
-                if(encoderPosition > reportedPosition && reportOnlyOddPositions && encoderPosition % 2 == 0) { // even position
-                    reportedPosition++;
-                }
             }
             return true;
         }
@@ -78,9 +73,6 @@ public:
             buttonCCWState = nextButtonState(buttonCCWState);
             if (buttonCCWState == BUTTON_DOWN){
                 reportedPosition--;
-                if(encoderPosition < reportedPosition && reportOnlyOddPositions && encoderPosition % 2 == 0) { // even position
-                    reportedPosition--;
-                }
             }
             return true;
         }
