@@ -61,7 +61,7 @@ void readDashboard(void);
 void mapRawButtonsToDashboardButtonArray(void);
 
 unsigned long lastRadioReset = 0;
-
+int16_t previousRudderTrim = 0;
 
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
   JOYSTICK_TYPE_JOYSTICK, 12, 0,
@@ -294,7 +294,9 @@ void printEncoderState(uint8_t i, RotaryEncoderWrapper encoder) {
 
 void readDashboard() {
   int16_t analogIn = analogRead(PA5);
-  Dashboard.setZAxis(analogIn);
+  int16_t rudderTrim = (analogIn + previousRudderTrim) >> 1; // low pass filter (kind of)
+  Dashboard.setZAxis(rudderTrim);
+  previousRudderTrim = rudderTrim;
 
   scanButtonMatrix();
   mapRawButtonsToDashboardButtonArray();
@@ -314,32 +316,15 @@ void readDashboard() {
 // #endif
 // }
 
-/*
-among the buttons I have 7 normally closed push buttons :`(
-Button pressed: 11 (Col: 1, Row: 3)
-Button pressed: 18 (Col: 2, Row: 2)
-Button pressed: 19 (Col: 2, Row: 3)
-Button pressed: 26 (Col: 3, Row: 2)
-Button pressed: 27 (Col: 3, Row: 3)
-Button pressed: 34 (Col: 4, Row: 2)
-Button pressed: 35 (Col: 4, Row: 3)
-*/
 void processButtonStates(uint8_t column, uint8_t rowStates) {
   for (uint8_t row = 0; row < 8; row++) {
     uint8_t rawButtonMatrixRow = row;
     if (row == 4)
-      continue; // P4 is not connected
+      continue; // P4 of the input PCF7584 is not connected
     if (row > 4)
       rawButtonMatrixRow = row - 1;
-    // workarond for normally closed pushbuttons
-    if ((column == 1 && row == 3) ||
-       (column == 2 && row == 2) ||
-       (column == 2 && row == 3) ||
-       (column == 3 && row == 2) ||
-       (column == 3 && row == 3) ||
-       (column == 4 && row == 2) ||
-       (column == 4 && row == 3)
-      ){
+    // I'm using 15 normally closed (push to disconnect) pushbuttons
+    if (row == 1 || row == 2 || row == 3){
         rawButtonMatrix[column][rawButtonMatrixRow] = rowStates & (1 << row);
     } else {
       rawButtonMatrix[column][rawButtonMatrixRow] = !(rowStates & (1 << row));
