@@ -25,6 +25,13 @@
 void checkButton(int pin, int button);
 int16_t scanButtons();
 
+int16_t previousAxisThrottle = 0;
+int16_t previousAxisPropellor = 0;
+int16_t previousAxisTrim = 0;
+int16_t previousAxisRudder = 0;
+int16_t previousAxisX = 0;
+int16_t previousAxisY = 0;
+
 
 RF24 radio(9, 10); // CE and CS pins used for NRF24L01 SPI connection
 
@@ -80,12 +87,31 @@ void loop()
       // read the data from the sensors
       RadioJoystick joystick;
       joystick.fromToByte = fromThrottleToReceiver;
-      joystick.axisThrottle = analogRead(A0);
-      joystick.axisPropellor = analogRead(A1);
-      joystick.axisTrim = analogRead(A2);
-      joystick.axisRudder = analogRead(A3);
-      joystick.axisX = analogRead(A4);
-      joystick.axisY = analogRead(A5);
+      
+      int16_t axisThrottle = analogRead(A0);
+      joystick.axisThrottle = (axisThrottle + previousAxisThrottle) >> 1; // low pass filter
+      previousAxisThrottle = axisThrottle;
+
+      int16_t axisPropellor = analogRead(A1);
+      joystick.axisPropellor = (axisPropellor + previousAxisPropellor) >> 1; // low pass filter
+      previousAxisPropellor = axisPropellor;
+
+      int16_t axisTrim = analogRead(A2);
+      joystick.axisTrim = (axisTrim + previousAxisTrim) >> 1; // low pass filter
+      previousAxisTrim = axisTrim;
+
+      int16_t axisRudder = analogRead(A3);
+      joystick.axisRudder = (axisRudder + previousAxisRudder) >> 1; // low pass filter
+      previousAxisRudder = axisRudder;
+
+      int16_t axisX = analogRead(A4);
+      joystick.axisX = (axisX + previousAxisX) >> 1; // low pass filter
+      previousAxisX = axisX;
+
+      int16_t axisY = analogRead(A5);
+      joystick.axisY = (axisY + previousAxisY) >> 1; // low pass filter
+      previousAxisY = axisY;
+
       joystick.buttons = scanButtons();
 
       DEBUG_PRINT(", Throttle=");
