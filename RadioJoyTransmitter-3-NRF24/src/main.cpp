@@ -61,13 +61,43 @@ void setup()
 
 void loop()
 {
+  // read the data from the sensors
+  RadioJoystick joystick;
+  joystick.fromToByte = fromThrottleToReceiver;
+  
+  int16_t axisThrottle = analogRead(A0);
+  joystick.axisThrottle = (axisThrottle + previousAxisThrottle) >> 1; // low pass filter
+  previousAxisThrottle = axisThrottle;
+
+  int16_t axisPropellor = analogRead(A1);
+  joystick.axisPropellor = (axisPropellor + previousAxisPropellor) >> 1; // low pass filter
+  previousAxisPropellor = axisPropellor;
+
+  int16_t axisTrim = analogRead(A2);
+  joystick.axisTrim = (axisTrim + previousAxisTrim) >> 1; // low pass filter
+  previousAxisTrim = axisTrim;
+
+  int16_t axisRudder = analogRead(A3);
+  joystick.axisRudder = (axisRudder + previousAxisRudder) >> 1; // low pass filter
+  previousAxisRudder = axisRudder;
+
+  int16_t axisX = analogRead(A4);
+  joystick.axisX = (axisX + previousAxisX) >> 1; // low pass filter
+  previousAxisX = axisX;
+
+  int16_t axisY = analogRead(A5);
+  joystick.axisY = (axisY + previousAxisY) >> 1; // low pass filter
+  previousAxisY = axisY;
+
+  joystick.buttons = scanButtons();
+
   // let's wait for the server's invitation so sen our data
   radio.startListening();                                    // Now, continue listening
   unsigned long started_waiting_at = millis();               // Set up a timeout period, get the current microseconds
   boolean timeout = false;                                   // Set up a variable to indicate if a response was received or not
   
   while ( ! radio.available() ){                             // While nothing is received
-    if (millis() - started_waiting_at > 500 ){            // If waited longer than 20ms, indicate timeout and exit while loop
+    if (millis() - started_waiting_at > 500 ){               // If waited longer than 0.5 sec, indicate timeout and exit while loop
         timeout = true;
         break;
     }      
@@ -84,36 +114,6 @@ void loop()
 
     if (fromThrottleToReceiver == request) {
       // if the request was for the throttle data
-      // read the data from the sensors
-      RadioJoystick joystick;
-      joystick.fromToByte = fromThrottleToReceiver;
-      
-      int16_t axisThrottle = analogRead(A0);
-      joystick.axisThrottle = (axisThrottle + previousAxisThrottle) >> 1; // low pass filter
-      previousAxisThrottle = axisThrottle;
-
-      int16_t axisPropellor = analogRead(A1);
-      joystick.axisPropellor = (axisPropellor + previousAxisPropellor) >> 1; // low pass filter
-      previousAxisPropellor = axisPropellor;
-
-      int16_t axisTrim = analogRead(A2);
-      joystick.axisTrim = (axisTrim + previousAxisTrim) >> 1; // low pass filter
-      previousAxisTrim = axisTrim;
-
-      int16_t axisRudder = analogRead(A3);
-      joystick.axisRudder = (axisRudder + previousAxisRudder) >> 1; // low pass filter
-      previousAxisRudder = axisRudder;
-
-      int16_t axisX = analogRead(A4);
-      joystick.axisX = (axisX + previousAxisX) >> 1; // low pass filter
-      previousAxisX = axisX;
-
-      int16_t axisY = analogRead(A5);
-      joystick.axisY = (axisY + previousAxisY) >> 1; // low pass filter
-      previousAxisY = axisY;
-
-      joystick.buttons = scanButtons();
-
       DEBUG_PRINT(", Throttle=");
       DEBUG_PRINT(joystick.axisThrottle); 
       DEBUG_PRINT(", Propellor=");
