@@ -22,6 +22,8 @@
   #define DEBUG_PRINT(x)
 #endif
 
+// #define SIX_AXIS
+
 void checkButton(int pin, int button);
 int16_t scanButtons();
 
@@ -77,6 +79,7 @@ void loop()
   joystick.axisTrim = (axisTrim + previousAxisTrim) >> 1; // low pass filter
   previousAxisTrim = axisTrim;
 
+#ifdef SIX_AXIS
   int16_t axisRudder = analogRead(A3);
   joystick.axisRudder = (axisRudder + previousAxisRudder) >> 1; // low pass filter
   previousAxisRudder = axisRudder;
@@ -90,8 +93,14 @@ void loop()
   previousAxisY = axisY;
 
   joystick.buttons = scanButtons();
+#else
+  joystick.axisRudder = 0;
+  joystick.axisX = 0;
+  joystick.axisY = 0;
+  joystick.buttons = 0;
+#endif
 
-  // let's wait for the server's invitation so sen our data
+// let's wait for the server's invitation so sen our data
   radio.startListening();                                    // Now, continue listening
   unsigned long started_waiting_at = millis();               // Set up a timeout period, get the current microseconds
   boolean timeout = false;                                   // Set up a variable to indicate if a response was received or not
@@ -205,14 +214,3 @@ void checkButton(int pin, int button){
     buttons[button].state = currentState;
   }
 }
-
-//void printBinaryUnsignedInt(unsigned int value)
-//{
-//    for (unsigned int mask = 0x8000; mask; mask >>= 1)
-//    {
-//        Serial.print((mask & value) ? '1' : '0');
-//    }
-//    Serial.println();
-//}
-
-
