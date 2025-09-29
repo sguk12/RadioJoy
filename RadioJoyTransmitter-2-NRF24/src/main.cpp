@@ -39,6 +39,8 @@ struct Button {
 Button buttons[NUMBER_BUTTONS];
 const int DEBOUNCE = 10;
 
+RadioJoystick joystick;
+
 void setup()
 {
   
@@ -63,41 +65,6 @@ void setup()
 
 void loop()
 {
-  RadioJoystick joystick;
-  joystick.fromToByte = fromJoystickToReceiver;
-  int16_t a0 = analogRead(A0);
-  joystick.axisY = (a0 + previousA0) >> 1;
-  previousA0 = a0;
-  int16_t a1 = analogRead(A1);
-  joystick.axisX = (a1 + previousA1) >> 1;
-  previousA1 = a1;
-  joystick.buttons = scanButtons();
-
-  // Let's make the magnetic field sensor readings somewhat linear
-  // Xcentre=606, k1=0.84=511/606, k2=1.23=511/(1023-606)
-  int Xcentre=592; float kx1=0.86/* =511/592 */, kx2=1.19;/* =511/(1023-592) */
-  if(joystick.axisX < Xcentre){
-    joystick.axisX = (int)(joystick.axisX * kx1);
-  }else{
-    joystick.axisX = (int)(511 + (joystick.axisX - Xcentre) * kx2 );
-  }
-  int Ycentre=433; float ky1=1.18/* =511/433 */, ky2=0.87;/* =511/(1023-433) */
-  if(joystick.axisY < Ycentre){
-    joystick.axisY = (int)(joystick.axisY * ky1);
-  }else{
-    joystick.axisY = (int)(511 + (joystick.axisY - Ycentre) * ky2 );
-  }
-  DEBUG_PRINT("X=");
-  DEBUG_PRINT(joystick.axisX); 
-  DEBUG_PRINT(", Y=");
-  DEBUG_PRINT(joystick.axisY);
-  DEBUG_PRINT(", \tButtons=");
-  DEBUG_PRINT(buttons[0].state);
-  DEBUG_PRINT(buttons[1].state);
-  DEBUG_PRINT(buttons[2].state);
-  DEBUG_PRINTLN(buttons[3].state);
-  
-
   // let's wait for the server's invitation so sen our data
   radio.startListening();                                    // Now, continue listening
   unsigned long started_waiting_at = millis();               // Set up a timeout period, get the current microseconds
@@ -115,7 +82,7 @@ void loop()
   }else{
     uint8_t request = 0;
     radio.read( &request, sizeof(uint8_t) );
-    if (fromThrottleToReceiver == request) {
+    if (fromJoystickToReceiver == request) {
       // if the request was for the throttle data
       // read the data from the sensors
       delay(2); //this delay is to allow the receiver to prepare for this transmission
@@ -124,6 +91,40 @@ void loop()
       if (!radio.write( &joystick, sizeof(joystick) )){ // This will block until complete
         DEBUG_PRINTLN(F("failed"));
       }
+
+      // the previous value of the joystick record has just been sent, let's calculate a new one
+      joystick.fromToByte = fromJoystickToReceiver;
+      int16_t a0 = analogRead(A0);
+      joystick.axisY = (a0 + previousA0) >> 1;
+      previousA0 = a0;
+      int16_t a1 = analogRead(A1);
+      joystick.axisX = (a1 + previousA1) >> 1;
+      previousA1 = a1;
+      joystick.buttons = scanButtons();
+
+      // Let's make the magnetic field sensor readings somewhat linear
+      // Xcentre=606, k1=0.84=511/606, k2=1.23=511/(1023-606)
+      int Xcentre=592; float kx1=0.86/* =511/592 */, kx2=1.19;/* =511/(1023-592) */
+      if(joystick.axisX < Xcentre){
+        joystick.axisX = (int)(joystick.axisX * kx1);
+      }else{
+        joystick.axisX = (int)(511 + (joystick.axisX - Xcentre) * kx2 );
+      }
+      int Ycentre=433; float ky1=1.18/* =511/433 */, ky2=0.87;/* =511/(1023-433) */
+      if(joystick.axisY < Ycentre){
+        joystick.axisY = (int)(joystick.axisY * ky1);
+      }else{
+        joystick.axisY = (int)(511 + (joystick.axisY - Ycentre) * ky2 );
+      }
+      DEBUG_PRINT("X=");
+      DEBUG_PRINT(joystick.axisX); 
+      DEBUG_PRINT(", Y=");
+      DEBUG_PRINT(joystick.axisY);
+      DEBUG_PRINT(", \tButtons=");
+      DEBUG_PRINT(buttons[0].state);
+      DEBUG_PRINT(buttons[1].state);
+      DEBUG_PRINT(buttons[2].state);
+      DEBUG_PRINTLN(buttons[3].state);
     }
   }
 }
