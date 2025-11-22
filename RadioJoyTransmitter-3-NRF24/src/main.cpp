@@ -68,27 +68,27 @@ void loop()
   joystick.fromToByte = fromThrottleToReceiver;
   
 #ifdef SIX_AXIS
-  int16_t axisThrottle = analogRead(A0);
+  int16_t axisThrottle = analogRead(A7);
   joystick.axisThrottle = 1023 - ((axisThrottle + previousAxisThrottle) >> 1); // low pass filter, axis inversion
   previousAxisThrottle = axisThrottle;
 
-  int16_t axisPropellor = analogRead(A1);
+  int16_t axisPropellor = analogRead(A3);
   joystick.axisPropellor = 1023 - ((axisPropellor + previousAxisPropellor) >> 1); // low pass filter, axis inversion
   previousAxisPropellor = axisPropellor;
 
-  int16_t axisTrim = analogRead(A2);
+  int16_t axisTrim = analogRead(A1);
   joystick.axisTrim = 1023 - ((axisTrim + previousAxisTrim) >> 1); // low pass filter, axis inversion
   previousAxisTrim = axisTrim;
 
-  int16_t axisRudder = analogRead(A3);
+  int16_t axisRudder = analogRead(A6);
   joystick.axisRudder = 1023 - ((axisRudder + previousAxisRudder) >> 1); // low pass filter, axis inversion
   previousAxisRudder = axisRudder;
 
-  int16_t axisX = analogRead(A6);
+  int16_t axisX = analogRead(A2);
   joystick.axisX = 1023 - ((axisX + previousAxisX) >> 1); // low pass filter, axis inversion
   previousAxisX = axisX;
 
-  int16_t axisY = analogRead(A7);
+  int16_t axisY = analogRead(A0);
   joystick.axisY = 1023 - ((axisY + previousAxisY) >> 1); // low pass filter, axis inversion
   previousAxisY = axisY;
 
