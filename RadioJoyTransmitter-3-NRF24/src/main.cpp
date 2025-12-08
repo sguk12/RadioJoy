@@ -8,28 +8,24 @@
 
 #include <Arduino.h>
 #include <RF24.h>
-#include <Wire.h>
 #include "RadioJoy.h"
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
   #define DEBUG_BEGIN(x) Serial.begin(x)
   #define DEBUG_PRINTLN(x)  Serial.println(x)
   #define DEBUG_PRINT(x)  Serial.print(x)
-  #define DEBUG_PRINT_BITS(x)  Serial.print((uint16_t)x, BIN)
 #else
   #define DEBUG_BEGIN(x)
   #define DEBUG_PRINTLN(x)
   #define DEBUG_PRINT(x)
-  #define DEBUG_PRINT_BITS(x)
 #endif
 
 #define SIX_AXIS
 
-#define PCF8574_IN 0X20
-
-int16_t scanButtonMatrix();
+void checkButton(int pin, int button);
+int16_t scanButtons();
 
 int16_t previousAxisThrottle = 0;
 int16_t previousAxisPropellor = 0;
@@ -45,7 +41,6 @@ void setup()
 {
   DEBUG_BEGIN(115200);
   
-  Wire.begin(); 
   radio.begin();
   // Set the PA Level low to prevent power supply related issues since this is a
   // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
@@ -57,8 +52,12 @@ void setup()
   // Start the radio listening for data
   radio.startListening();
 
-  pinMode(7,OUTPUT);
-  pinMode(8,OUTPUT);
+  pinMode(4,INPUT_PULLUP);
+  pinMode(5,INPUT_PULLUP);
+  pinMode(6,INPUT_PULLUP);
+  pinMode(7,INPUT_PULLUP);
+  pinMode(2,OUTPUT);
+  pinMode(3,OUTPUT);
 
 }
 
@@ -93,7 +92,7 @@ void loop()
   joystick.axisY = 1023 - ((axisY + previousAxisY) >> 1); // low pass filter, axis inversion
   previousAxisY = axisY;
 
-  joystick.buttons = scanButtonMatrix();
+  // joystick.buttons = scanButtons();
 #else
   int16_t axisThrottle = analogRead(A0);
   joystick.axisThrottle = (axisThrottle + previousAxisThrottle) >> 1; // low pass filter
@@ -132,7 +131,7 @@ void loop()
     radio.read( &request, sizeof(uint8_t) );
 
     DEBUG_PRINT("got request: ");
-    DEBUG_PRINTLN(request);
+    DEBUG_PRINTLN(request[0]);
 
     if (fromThrottleToReceiver == request) {
       // if the request was for the throttle data
@@ -155,37 +154,75 @@ void loop()
   }
 }
 
-int16_t scanButtonMatrix() {
-  uint8_t inputStates1 = 0xFF;
-  uint8_t inputStates2 = 0xFF;
-  uint16_t result = 0xFF;
+struct Button {
+  unsigned long startDebounce = 0;
+  int state = LOW; // the buttons should be normally closed (push to open)
+};
 
-  digitalWrite(7, LOW);
-  Wire.requestFrom(PCF8574_IN, 1); // request from device PCF8574_IN one byte
-  if (Wire.available()){
-    inputStates1 = Wire.read(); // reads one byte 
-    inputStates1 ^= (uint8_t)0b00000011; // invert two bits with XOR with 0b11000000
-  }
-  else {
-    DEBUG_PRINTLN("WIRE not available");
-  }
-  digitalWrite(7, HIGH);
+Button buttons[16];
+const int DEBOUNCE = 10;
 
-  digitalWrite(8, LOW);
-  Wire.requestFrom(PCF8574_IN, 1); // request from device PCF8574_IN one byte
-  if (Wire.available()){
-    inputStates2 = Wire.read(); // reads one byte  
-    inputStates2 ^= (uint8_t)0b00000011; // invert two bits with XOR with 0b11000000
-  }
-  else {
-    DEBUG_PRINTLN("WIRE not available");
-  }
-  digitalWrite(8, HIGH);
-  // Combine: second read in upper byte, first read in lower byte
-  result = ((uint16_t)inputStates2 << 8) | inputStates1;
+int16_t scanButtons()
+{
+  // scan the first row
+  digitalWrite(2, LOW);
+  delay(1);
+  checkButton(4, 0);
+  checkButton(5, 1);
+  checkButton(6, 2);
+  checkButton(7, 3);
+  digitalWrite(2, HIGH);
+  
+  // scan the second row
+  digitalWrite(3, LOW);
+  delay(1);
+  checkButton(4, 4);
+  checkButton(5, 5);
+  checkButton(6, 6);
+  checkButton(7, 7);
+  digitalWrite(3, HIGH);
 
-  DEBUG_PRINT_BITS(result);
-  DEBUG_PRINTLN();
+  int16_t result = 0;
+  int16_t currentBit;
+  for(int i = 15; i >= 0; i--){
+    if(buttons[i].state == HIGH){ // the buttons should be normally closed (push to open)
+      currentBit = 1;
+    }else{
+      currentBit = 0;
+    }
+    result = result | currentBit << i;
 
+    DEBUG_PRINT("button[");
+    DEBUG_PRINT(i);
+    DEBUG_PRINT("]=");
+    DEBUG_PRINT(buttons[i].state);
+    DEBUG_PRINT("  ");
+  }
+//  printBinaryUnsignedInt(result);
   return result;
+}
+
+void checkButton(int pin, int button){
+  int currentState;
+
+  if (buttons[button].startDebounce != 0) {
+    if(buttons[button].startDebounce + DEBOUNCE > millis()){
+      // debounce time has not lapsed yet... exit
+      return;
+    }else{
+      // debounce time has lapsed... reset the start time and continue
+      buttons[button].startDebounce = 0;
+    }
+  }
+  
+  currentState = digitalRead(pin);
+  
+  if (buttons[button].state == currentState) {
+    // the button state has not changed... exit
+    return;
+  }else{
+    // the button state has changed... let's capture the new state and start the debounce process
+    buttons[button].startDebounce = millis();
+    buttons[button].state = currentState;
+  }
 }
