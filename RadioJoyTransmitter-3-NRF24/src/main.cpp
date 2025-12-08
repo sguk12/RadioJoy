@@ -16,10 +16,12 @@
   #define DEBUG_BEGIN(x) Serial.begin(x)
   #define DEBUG_PRINTLN(x)  Serial.println(x)
   #define DEBUG_PRINT(x)  Serial.print(x)
+  #define DEBUG_PRINT_BIN(x)  Serial.print(x, BIN)
 #else
   #define DEBUG_BEGIN(x)
   #define DEBUG_PRINTLN(x)
   #define DEBUG_PRINT(x)
+  #define DEBUG_PRINT_BIN(x)
 #endif
 
 #define SIX_AXIS
@@ -52,12 +54,16 @@ void setup()
   // Start the radio listening for data
   radio.startListening();
 
-  pinMode(4,INPUT_PULLUP);
-  pinMode(5,INPUT_PULLUP);
-  pinMode(6,INPUT_PULLUP);
-  pinMode(7,INPUT_PULLUP);
-  pinMode(2,OUTPUT);
-  pinMode(3,OUTPUT);
+  pinMode(0, INPUT_PULLUP); // this is RXI, which is used in the Serial
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
+  pinMode(6, INPUT_PULLUP);
+  pinMode(7, INPUT_PULLUP);
+  pinMode(8, INPUT_PULLUP);
+  pinMode(A5, OUTPUT);
+  pinMode(A4, OUTPUT);
 
 }
 
@@ -92,7 +98,7 @@ void loop()
   joystick.axisY = 1023 - ((axisY + previousAxisY) >> 1); // low pass filter, axis inversion
   previousAxisY = axisY;
 
-  // joystick.buttons = scanButtons();
+  joystick.buttons = scanButtons();
 #else
   int16_t axisThrottle = analogRead(A0);
   joystick.axisThrottle = (axisThrottle + previousAxisThrottle) >> 1; // low pass filter
@@ -149,14 +155,14 @@ void loop()
         DEBUG_PRINTLN(F("failed"));
       }
     }else{
-//        Serial.println("request is not recognised");
+      // DEBUG_PRINTLN("request is not recognised");
     }
   }
 }
 
 struct Button {
   unsigned long startDebounce = 0;
-  int state = LOW; // the buttons should be normally closed (push to open)
+  int state = LOW; 
 };
 
 Button buttons[16];
@@ -165,40 +171,53 @@ const int DEBOUNCE = 10;
 int16_t scanButtons()
 {
   // scan the first row
-  digitalWrite(2, LOW);
+  digitalWrite(A4, LOW);
   delay(1);
-  checkButton(4, 0);
-  checkButton(5, 1);
-  checkButton(6, 2);
-  checkButton(7, 3);
-  digitalWrite(2, HIGH);
+  checkButton(0, 0);
+  checkButton(2, 1);
+  checkButton(3, 2);
+  checkButton(4, 3);
+  checkButton(5, 4);
+  checkButton(6, 5);
+  checkButton(7, 6);
+  checkButton(8, 7);
+  digitalWrite(A4, HIGH);
   
   // scan the second row
-  digitalWrite(3, LOW);
+  digitalWrite(A5, LOW);
   delay(1);
-  checkButton(4, 4);
-  checkButton(5, 5);
-  checkButton(6, 6);
-  checkButton(7, 7);
-  digitalWrite(3, HIGH);
+  checkButton(0, 8);
+  checkButton(2, 9);
+  checkButton(3, 10);
+  checkButton(4, 11);
+  checkButton(5, 12);
+  checkButton(6, 13);
+  checkButton(7, 14);
+  checkButton(8, 15);
+  digitalWrite(A5, HIGH);
 
   int16_t result = 0;
   int16_t currentBit;
   for(int i = 15; i >= 0; i--){
-    if(buttons[i].state == HIGH){ // the buttons should be normally closed (push to open)
-      currentBit = 1;
-    }else{
-      currentBit = 0;
+    if (i == 6 || i == 7 || i == 14 || i == 15) { // these are the normally closed buttons
+      if(buttons[i].state == HIGH){ // the normally closed buttons (push to break the connection)
+        currentBit = 0;
+      }else{
+        currentBit = 1;
+      }
+    } else {
+      if(buttons[i].state == HIGH){ // the rotary switches and normally open buttons
+        currentBit = 1;
+      }else{
+        currentBit = 0;
+      }
     }
     result = result | currentBit << i;
 
-    DEBUG_PRINT("button[");
-    DEBUG_PRINT(i);
-    DEBUG_PRINT("]=");
-    DEBUG_PRINT(buttons[i].state);
-    DEBUG_PRINT("  ");
+    DEBUG_PRINT("buttons: ");
+    DEBUG_PRINT_BIN(result);
+    DEBUG_PRINTLN(" ");
   }
-//  printBinaryUnsignedInt(result);
   return result;
 }
 
