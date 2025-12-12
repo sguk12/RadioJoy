@@ -39,7 +39,7 @@
 
 #define LED_PIN PC13
 #define NUMBER_OF_JOYSTICK_BUTTONS 4
-#define NUMBER_OF_THROTTLE_BUTTONS 10
+#define NUMBER_OF_THROTTLE_BUTTONS 16
 // 20 pushbuttons + 5 encoder buttons * 6 switch positions + 5 encoders * 2 rotation directions * 6 switch positions + 1 unmodifiable encoder * 2 rotation dir 
 // + 12 buttons from the Joystick (MSFS2024 bug: button 2 on the Joystick and button 2 on the Dashboard are the same button in MSFS2024)
 // = 20 + 5 * 6 + 5 * 2 * 6 + 2 + 12

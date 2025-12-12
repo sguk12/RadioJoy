@@ -16,7 +16,7 @@
   #define DEBUG_BEGIN(x) Serial.begin(x)
   #define DEBUG_PRINTLN(x)  Serial.println(x)
   #define DEBUG_PRINT(x)  Serial.print(x)
-  #define DEBUG_PRINT_BIN(x)  Serial.print(x, BIN)
+  #define DEBUG_PRINT_BIN(x)  Serial.print((uint16_t)x, BIN)
 #else
   #define DEBUG_BEGIN(x)
   #define DEBUG_PRINTLN(x)
@@ -54,16 +54,14 @@ void setup()
   // Start the radio listening for data
   radio.startListening();
 
-  pinMode(0, INPUT_PULLUP); // this is RXI, which is used in the Serial
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
-  pinMode(4, INPUT_PULLUP);
-  pinMode(5, INPUT_PULLUP);
-  pinMode(6, INPUT_PULLUP);
-  pinMode(7, INPUT_PULLUP);
+  pinMode(A5, INPUT_PULLUP);
+  pinMode(A4, INPUT_PULLUP);
   pinMode(8, INPUT_PULLUP);
-  pinMode(A5, OUTPUT);
-  pinMode(A4, OUTPUT);
+  pinMode(7, INPUT_PULLUP);
+  pinMode(6, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(3, OUTPUT);
 
 }
 
@@ -137,7 +135,7 @@ void loop()
     radio.read( &request, sizeof(uint8_t) );
 
     DEBUG_PRINT("got request: ");
-    DEBUG_PRINTLN(request[0]);
+    DEBUG_PRINTLN(request);
 
     if (fromThrottleToReceiver == request) {
       // if the request was for the throttle data
@@ -167,57 +165,42 @@ struct Button {
 
 Button buttons[16];
 const int DEBOUNCE = 10;
+uint8_t rows[] = {3,4,5,6};
 
 int16_t scanButtons()
 {
-  // scan the first row
-  digitalWrite(A4, LOW);
-  delay(1);
-  checkButton(0, 0);
-  checkButton(2, 1);
-  checkButton(3, 2);
-  checkButton(4, 3);
-  checkButton(5, 4);
-  checkButton(6, 5);
-  checkButton(7, 6);
-  checkButton(8, 7);
-  digitalWrite(A4, HIGH);
-  
-  // scan the second row
-  digitalWrite(A5, LOW);
-  delay(1);
-  checkButton(0, 8);
-  checkButton(2, 9);
-  checkButton(3, 10);
-  checkButton(4, 11);
-  checkButton(5, 12);
-  checkButton(6, 13);
-  checkButton(7, 14);
-  checkButton(8, 15);
-  digitalWrite(A5, HIGH);
-
-  int16_t result = 0;
-  int16_t currentBit;
+  int j = 0;
+  for(int i = 0; i < 4; i++) {
+    digitalWrite(rows[i], LOW);
+    delay(1);
+    checkButton(A5, j++);
+    checkButton(A4, j++);
+    checkButton(8, j++);
+    checkButton(7, j++);
+    digitalWrite(rows[i], HIGH);
+  }
+  uint16_t result = 0;
+  uint16_t currentBit;
   for(int i = 15; i >= 0; i--){
-    if (i == 6 || i == 7 || i == 14 || i == 15) { // these are the normally closed buttons
+    if (i == 13 || i == 12 || i == 9 || i == 8) { // these are the normally closed buttons
       if(buttons[i].state == HIGH){ // the normally closed buttons (push to break the connection)
-        currentBit = 0;
-      }else{
         currentBit = 1;
+      }else{
+        currentBit = 0;
       }
     } else {
-      if(buttons[i].state == HIGH){ // the rotary switches and normally open buttons
+      if(buttons[i].state == LOW){ // the rotary switches and normally open buttons
         currentBit = 1;
       }else{
         currentBit = 0;
       }
     }
     result = result | currentBit << i;
-
-    DEBUG_PRINT("buttons: ");
-    DEBUG_PRINT_BIN(result);
-    DEBUG_PRINTLN(" ");
   }
+  DEBUG_PRINT("buttons: ");
+  DEBUG_PRINT_BIN(result);
+  DEBUG_PRINTLN(" ");
+
   return result;
 }
 
