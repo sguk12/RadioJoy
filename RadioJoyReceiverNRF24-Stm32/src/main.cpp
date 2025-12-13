@@ -38,12 +38,13 @@
 #endif
 
 #define LED_PIN PC13
-#define NUMBER_OF_JOYSTICK_BUTTONS 4
 #define NUMBER_OF_THROTTLE_BUTTONS 16
+#define NUMBER_OF_JOYSTICK_BUTTONS 4
+#define NUMBER_OF_FIRST_JOYSTICK_BUTTONS NUMBER_OF_JOYSTICK_BUTTONS + NUMBER_OF_THROTTLE_BUTTONS + 4 // 4 calculated OFF buttons for 4 rotary switches
 // 20 pushbuttons + 5 encoder buttons * 6 switch positions + 5 encoders * 2 rotation directions * 6 switch positions + 1 unmodifiable encoder * 2 rotation dir 
 // + 12 buttons from the Joystick (MSFS2024 bug: button 2 on the Joystick and button 2 on the Dashboard are the same button in MSFS2024)
 // = 20 + 5 * 6 + 5 * 2 * 6 + 2 + 12
-#define NUMBER_OF_BUTTONS 112 + NUMBER_OF_JOYSTICK_BUTTONS + NUMBER_OF_THROTTLE_BUTTONS
+#define NUMBER_OF_BUTTONS 112
 
 
 // functions declarations
@@ -65,7 +66,7 @@ unsigned long lastRadioReset = 0;
 int16_t previousRudderTrim = 0;
 
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,
-  JOYSTICK_TYPE_JOYSTICK, 1, 0,
+  JOYSTICK_TYPE_JOYSTICK, NUMBER_OF_FIRST_JOYSTICK_BUTTONS, 0,
   true, true, false, true, true, false,
   true, true, false, false, false);
 
@@ -104,8 +105,6 @@ RotaryEncoderWrapper encoderWrapper6(ENC6A, ENC6B, RotaryEncoder::LatchMode::FOU
 uint8_t pastSingleSwitchPosition = 0;
 uint8_t pastFourSwitchPosition = 0;
 uint8_t rawButtonMatrix[5][7];
-uint8_t joystickButtons[NUMBER_OF_JOYSTICK_BUTTONS];
-uint8_t throttleButtons[NUMBER_OF_THROTTLE_BUTTONS];
 int16_t dashboardRz=0;
 int16_t dashboardRx=0;
 int16_t dashboardRy=0;
@@ -188,8 +187,7 @@ void sendInvitationTo(const char* name, int8_t slave) {
   }
   
   encoderWrapper1.tick(); // manual polling of the first encoder
-
-  delay(5);
+  delay(3);
 }
 
 void readSlaveResponseAndUpdateJoystick(){
@@ -222,12 +220,11 @@ void readSlaveResponseAndUpdateJoystick(){
         Joystick.setXAxis(buf.axisX);
         Joystick.setYAxis(buf.axisY);
         for(uint8_t i=0; i < NUMBER_OF_JOYSTICK_BUTTONS; i++){
-          // assign the i-th bit of the buf.buttons
-          joystickButtons[i] = bitRead(buf.buttons, i);
           // TODO: This is workaround for the MSFS2O24 mixing up the buttons from the two joysticks with the same name
-          // Joystick.setButton(i, joystickButtons[i]);
+          // assign the i-th bit of the buf.buttons
+          Joystick.setButton(i, bitRead(buf.buttons, i));
         }
-        Joystick.setButton(0, joystickButtons[0]); // there is no button 0 on the Dashboard, so no overlap confusing MSFS2024
+        // Joystick.setButton(0, joystickButtons[0]); // there is no button 0 on the Dashboard, so no overlap confusing MSFS2024
         DEBUG_PRINTLN(F("Joystick recieved."));   // DEBUG
         blink(5);
       } else if (buf.fromToByte == fromThrottleToReceiver) {
@@ -238,10 +235,23 @@ void readSlaveResponseAndUpdateJoystick(){
         dashboardRz = buf.axisRudder;
         dashboardRx = buf.axisX;
         dashboardRy = buf.axisY;
+
+        uint8_t fuelLeftOff = 0;
+        uint8_t fuelRightOff = 0;
+        uint8_t magnetoLeftOff = 0;
+        uint8_t magnetoRightOff = 0;
+        uint8_t throttleButtons[NUMBER_OF_THROTTLE_BUTTONS];
         for(uint8_t i=0; i < NUMBER_OF_THROTTLE_BUTTONS; i++){
           // assign the i-th bit of the buf.buttons
           throttleButtons[i] = bitRead(buf.buttons, i);
+          Joystick.setButton(NUMBER_OF_JOYSTICK_BUTTONS + i, throttleButtons[i]);
         }
+        uint8_t i = NUMBER_OF_JOYSTICK_BUTTONS + NUMBER_OF_THROTTLE_BUTTONS;
+        Joystick.setButton(i++, throttleButtons[1]+throttleButtons[5] == 0 ? 1 : 0); // fuelLeftOff
+        Joystick.setButton(i++, throttleButtons[0]+throttleButtons[4] == 0 ? 1 : 0); // fuelRightOff
+        Joystick.setButton(i++, throttleButtons[2]+throttleButtons[6]+throttleButtons[10]+throttleButtons[14] > 0 ? 0 : 1); // magnetoLeftOff
+        Joystick.setButton(i++, throttleButtons[3]+throttleButtons[7]+throttleButtons[11]+throttleButtons[15] > 0 ? 0 : 1); // magnetoRightOff
+
         DEBUG_PRINTLN(F("Throttle recieved."));   // DEBUG
         blink(5);
       } else{
@@ -452,12 +462,6 @@ void mapRawButtonsToDashboardButtonArray() {
     } else {
       i += 12; // skip 12 buttons/button positions because all buttons have already been set to 0 in the first line of this function
     }
-  }
-  for (uint8_t j = 0; j < NUMBER_OF_JOYSTICK_BUTTONS; j++) {
-    Dashboard.setButton(i++, joystickButtons[j]);
-  }
-  for (uint8_t j = 0; j < NUMBER_OF_THROTTLE_BUTTONS; j++) {
-    Dashboard.setButton(i++, throttleButtons[j]);
   }
   
   if (pastFourSwitchPosition != fourSwitchPosition) {
