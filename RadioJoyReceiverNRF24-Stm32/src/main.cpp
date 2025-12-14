@@ -61,6 +61,7 @@ void encoder5ISR(void);
 void encoder6ISR(void);
 void readDashboard(void);
 void mapRawButtonsToDashboardButtonArray(void);
+uint8_t debounce(uint8_t x, uint8_t &count);
 
 unsigned long lastRadioReset = 0;
 int16_t previousRudderTrim = 0;
@@ -190,6 +191,11 @@ void sendInvitationTo(const char* name, int8_t slave) {
   delay(3);
 }
 
+uint8_t fuelLeftOffCount = 0;
+uint8_t fuelRightOffCount = 0;
+uint8_t magnetoLeftOffCount = 0;
+uint8_t magnetoRightOffCount = 0;
+
 void readSlaveResponseAndUpdateJoystick(){
   DEBUG_PRINT(F("readSlaveResponseAndUpdateJoystick "));   // DEBUG
 
@@ -236,21 +242,26 @@ void readSlaveResponseAndUpdateJoystick(){
         dashboardRx = buf.axisX;
         dashboardRy = buf.axisY;
 
-        uint8_t fuelLeftOff = 0;
-        uint8_t fuelRightOff = 0;
-        uint8_t magnetoLeftOff = 0;
-        uint8_t magnetoRightOff = 0;
         uint8_t throttleButtons[NUMBER_OF_THROTTLE_BUTTONS];
         for(uint8_t i=0; i < NUMBER_OF_THROTTLE_BUTTONS; i++){
           // assign the i-th bit of the buf.buttons
           throttleButtons[i] = bitRead(buf.buttons, i);
           Joystick.setButton(NUMBER_OF_JOYSTICK_BUTTONS + i, throttleButtons[i]);
         }
+        uint8_t fuelLeftOff = throttleButtons[1]+throttleButtons[5] == 0 ? 1 : 0;
+        uint8_t fuelRightOff = throttleButtons[0]+throttleButtons[4] == 0 ? 1 : 0;
+        uint8_t magnetoLeftOff = throttleButtons[2]+throttleButtons[6]+throttleButtons[10]+throttleButtons[14] > 0 ? 0 : 1;
+        uint8_t magnetoRightOff = throttleButtons[3]+throttleButtons[7]+throttleButtons[11]+throttleButtons[15] > 0 ? 0 : 1;
+        fuelLeftOff = debounce(fuelLeftOff, fuelLeftOffCount);
+        fuelRightOff = debounce(fuelRightOff, fuelRightOffCount);
+        magnetoLeftOff = debounce(magnetoLeftOff, magnetoLeftOffCount);
+        magnetoRightOff = debounce(magnetoRightOff, magnetoRightOffCount);
+
         uint8_t i = NUMBER_OF_JOYSTICK_BUTTONS + NUMBER_OF_THROTTLE_BUTTONS;
-        Joystick.setButton(i++, throttleButtons[1]+throttleButtons[5] == 0 ? 1 : 0); // fuelLeftOff
-        Joystick.setButton(i++, throttleButtons[0]+throttleButtons[4] == 0 ? 1 : 0); // fuelRightOff
-        Joystick.setButton(i++, throttleButtons[2]+throttleButtons[6]+throttleButtons[10]+throttleButtons[14] > 0 ? 0 : 1); // magnetoLeftOff
-        Joystick.setButton(i++, throttleButtons[3]+throttleButtons[7]+throttleButtons[11]+throttleButtons[15] > 0 ? 0 : 1); // magnetoRightOff
+        Joystick.setButton(i++, fuelLeftOff);
+        Joystick.setButton(i++, fuelRightOff);
+        Joystick.setButton(i++, magnetoLeftOff);
+        Joystick.setButton(i++, magnetoRightOff);
 
         DEBUG_PRINTLN(F("Throttle recieved."));   // DEBUG
         blink(5);
@@ -260,6 +271,21 @@ void readSlaveResponseAndUpdateJoystick(){
     }while(radio.available()); // read all the data from FIFO
   }
 }
+
+uint8_t debounce(uint8_t x, uint8_t &count) {
+  
+  if (x == 1) {
+    if (count < 4) {
+      count ++;
+      return 0;
+    }
+    return 1;
+  } else {
+    count = 0;  // Reset on any 0
+  }
+  return 0;
+}
+
 
 void radioBegin(){
   radio.begin();
