@@ -10,6 +10,10 @@
 #include <SparkFun_ADXL345.h>
 #include "RadioJoy.h"
 
+void findAxisCentre();
+int16_t readAxisData();
+int16_t axisData = 0;
+
 ADXL345 adxl = ADXL345();             // USE FOR I2C COMMUNICATION
 
 RF24 radio(7, 8); // CE and CS pins used for NRF24L01 SPI connection
@@ -106,25 +110,20 @@ void loop()
   }else{
     uint8_t request = 0;
     radio.read( &request, sizeof(uint8_t) );
-//Serial.print("got request: ");
-//Serial.println(request[0]);
     if (fromRudderToReceiver == request) {
       // if the request was for the rudder data
       // read the data from the sensors
       RadioJoystick joystick;
       joystick.fromToByte = fromRudderToReceiver;
-      joystick.axisRudder = readAxisData();
-
-//Serial.print(", filteredX=");
-//Serial.print((int)rudder.x);
-//Serial.print(", buf.rudder=");
-//Serial.println(joystick.axisRudder); 
+      joystick.axisRudder = axisData;
 
       delay(2); // this delay is to allow the receiver to prepare for our transmission
       radio.stopListening();                                    // First, stop listening so we can talk.
       if (!radio.write( &joystick, sizeof(joystick) )){ // This will block until complete
         //Serial.println(F("failed"));
       }
+      // the previous value of rudder has just been sent, we have time to calculate a new one.
+      axisData = readAxisData();
     }
     else
     {
@@ -155,8 +154,6 @@ void findAxisCentre(){
   unsigned long lastMillis = 0;
 
   unsigned long time_to_centre = 5000; // we'll spend 5 sec to find the centrepoint
-  int16_t oldCentre = 0;
-  
 
   while ( millis() < started_find_centre_at + time_to_centre ){
     int LED_PIN = 13;
@@ -182,24 +179,4 @@ void findAxisCentre(){
   rudder.minX = centre - rudder.half_range;
   rudder.maxX = centre + rudder.half_range;
 }
-
-//void batteryCheck(){
-//  int LED_BATTERY_PIN = 2;
-//  int SENSOR_PIN = A0;
-//  int CHARGED_BATTERY = 512;
-//  
-//  int sensorValue = analogRead(SENSOR_PIN);
-//
-//  if (sensorValue < CHARGED_BATTERY){
-//    pinMode(LED_BATTERY_PIN, OUTPUT);
-//    for (int i=sensorValue; i<1023; i=i+100){
-//      digitalWrite(LED_BATTERY_PIN, HIGH);    // turn the LED on (HIGH is the voltage level)
-//      delay(1000);                            // wait for a second
-//      digitalWrite(LED_BATTERY_PIN, LOW);     // turn the LED off by making the voltage LOW
-//      delay(1000);                            // wait for a second
-//    }
-//  }
-//}
-
-
 
