@@ -42,9 +42,9 @@
 #define NUMBER_OF_JOYSTICK_BUTTONS 4
 #define NUMBER_OF_FIRST_JOYSTICK_BUTTONS NUMBER_OF_JOYSTICK_BUTTONS + NUMBER_OF_THROTTLE_BUTTONS + 4 // 4 calculated OFF buttons for 4 rotary switches
 // 20 pushbuttons + 5 encoder buttons * 6 switch positions + 5 encoders * 2 rotation directions * 6 switch positions + 1 unmodifiable encoder * 2 rotation dir 
-// + 12 buttons from the Joystick (MSFS2024 bug: button 2 on the Joystick and button 2 on the Dashboard are the same button in MSFS2024)
-// = 20 + 5 * 6 + 5 * 2 * 6 + 2 + 12
-#define NUMBER_OF_BUTTONS 112
+// + 10 pushbuttons for the 0 switch position
+// = 20 + 5 * 6 + 5 * 2 * 6 + 2 + 10
+#define NUMBER_OF_BUTTONS 122
 
 
 // functions declarations
@@ -419,12 +419,25 @@ void mapRawButtonsToDashboardButtonArray() {
   for(uint8_t i=0; i < NUMBER_OF_BUTTONS; i++){
     Dashboard.setButton(i, 0);
   }
-  uint8_t i = 0;
-  // 20 pushbuttons
-  for (uint8_t row = 0; row < 4; row++) {
-    for (uint8_t col = 0; col < 5; col++) {
-      Dashboard.setButton(i, rawButtonMatrix[col][row]);
-      i++;
+  uint8_t buttonIndex = 0;
+  uint8_t fourSwitchPosition = getSwitchPosition(rawButtonMatrix[0][5], rawButtonMatrix[1][5], rawButtonMatrix[2][5], rawButtonMatrix[3][5], rawButtonMatrix[4][5]);
+  if (fourSwitchPosition == 0) {
+    // 10 first pushbuttons
+    for (uint8_t row = 0; row < 2; row++) {
+      for (uint8_t col = 0; col < 5; col++) {
+        Dashboard.setButton(buttonIndex, rawButtonMatrix[col][row]);
+        buttonIndex++;
+      }
+    }
+    // 10 "shifted" pushbuttons
+    buttonIndex += 10; // skip 10 buttons/button positions 11-20 because the four-switch is in the position 0 and these buttons are shifted to 112-122
+  } else {
+    // 20 pushbuttons
+    for (uint8_t row = 0; row < 4; row++) {
+      for (uint8_t col = 0; col < 5; col++) {
+        Dashboard.setButton(buttonIndex, rawButtonMatrix[col][row]);
+        buttonIndex++;
+      }
     }
   }
 
@@ -433,8 +446,8 @@ void mapRawButtonsToDashboardButtonArray() {
   // if (encoderWrapper1.update()) {printEncoderState(1, encoderWrapper1);}
   encoderWrapper1.update();
   // Set button states - these will alternate between UP/DOWN for each tick
-  Dashboard.setButton(i++, encoderWrapper1.getButtonCCW());  // CCW button
-  Dashboard.setButton(i++, encoderWrapper1.getButtonCW());   // CW button
+  Dashboard.setButton(buttonIndex++, encoderWrapper1.getButtonCCW());  // CCW button
+  Dashboard.setButton(buttonIndex++, encoderWrapper1.getButtonCW());   // CW button
 
   // single modifying switch is row 6
   // four enc modifying switch is row 5
@@ -446,11 +459,11 @@ void mapRawButtonsToDashboardButtonArray() {
       // if (encoderWrapper2.update()) {printEncoderState(2, encoderWrapper2);}
       encoderWrapper2.update();
       // Set button states - these will alternate between UP/DOWN for each tick
-      Dashboard.setButton(i++, encoderWrapper2.getButtonCCW());  // CCW button
-      Dashboard.setButton(i++, encoderWrapper2.getButtonCW());   // CW button
-      Dashboard.setButton(i++, rawButtonMatrix[0][4]); // the 'single' encoder's pushbutton
+      Dashboard.setButton(buttonIndex++, encoderWrapper2.getButtonCCW());  // CCW button
+      Dashboard.setButton(buttonIndex++, encoderWrapper2.getButtonCW());   // CW button
+      Dashboard.setButton(buttonIndex++, rawButtonMatrix[0][4]); // the 'single' encoder's pushbutton
     } else {
-      i += 3; // skip 3 buttons/button positions because all buttons have already been set to 0 in the first line of this function
+      buttonIndex += 3; // skip 3 buttons/button positions because all buttons have already been set to 0 in the first line of this function
     }
   }
   if (pastSingleSwitchPosition != singleSwitchPosition) {
@@ -458,35 +471,44 @@ void mapRawButtonsToDashboardButtonArray() {
     pastSingleSwitchPosition = singleSwitchPosition;
   }
 
-  uint8_t fourSwitchPosition = getSwitchPosition(rawButtonMatrix[0][5], rawButtonMatrix[1][5], rawButtonMatrix[2][5], rawButtonMatrix[3][5], rawButtonMatrix[4][5]);
   for (uint8_t slot = 0; slot < 6; slot++) {
     if (slot == fourSwitchPosition) {
       encoderWrapper3.update();
       // Set button states - these will alternate between UP/DOWN for each tick
-      Dashboard.setButton(i++, encoderWrapper3.getButtonCCW());  // CCW button
-      Dashboard.setButton(i++, encoderWrapper3.getButtonCW());   // CW button
-      Dashboard.setButton(i++, rawButtonMatrix[1][4]); // the encoder's pushbutton
+      Dashboard.setButton(buttonIndex++, encoderWrapper3.getButtonCCW());  // CCW button
+      Dashboard.setButton(buttonIndex++, encoderWrapper3.getButtonCW());   // CW button
+      Dashboard.setButton(buttonIndex++, rawButtonMatrix[1][4]); // the encoder's pushbutton
 
       encoderWrapper4.update();
       // Set button states - these will alternate between UP/DOWN for each tick
-      Dashboard.setButton(i++, encoderWrapper4.getButtonCCW());  // CCW button
-      Dashboard.setButton(i++, encoderWrapper4.getButtonCW());   // CW button
-      Dashboard.setButton(i++, rawButtonMatrix[2][4]); // the encoder's pushbutton
+      Dashboard.setButton(buttonIndex++, encoderWrapper4.getButtonCCW());  // CCW button
+      Dashboard.setButton(buttonIndex++, encoderWrapper4.getButtonCW());   // CW button
+      Dashboard.setButton(buttonIndex++, rawButtonMatrix[2][4]); // the encoder's pushbutton
 
       encoderWrapper5.update();
       // Set button states - these will alternate between UP/DOWN for each tick
-      Dashboard.setButton(i++, encoderWrapper5.getButtonCCW());  // CCW button
-      Dashboard.setButton(i++, encoderWrapper5.getButtonCW());   // CW button
-      Dashboard.setButton(i++, rawButtonMatrix[3][4]); // the encoder's pushbutton
+      Dashboard.setButton(buttonIndex++, encoderWrapper5.getButtonCCW());  // CCW button
+      Dashboard.setButton(buttonIndex++, encoderWrapper5.getButtonCW());   // CW button
+      Dashboard.setButton(buttonIndex++, rawButtonMatrix[3][4]); // the encoder's pushbutton
 
       // if (encoderWrapper6.update()) {printEncoderState(6, encoderWrapper6);}
       encoderWrapper6.update();
       // Set button states - these will alternate between UP/DOWN for each tick
-      Dashboard.setButton(i++, encoderWrapper6.getButtonCCW());  // CCW button
-      Dashboard.setButton(i++, encoderWrapper6.getButtonCW());   // CW button
-      Dashboard.setButton(i++, rawButtonMatrix[4][4]); // the encoder's pushbutton
+      Dashboard.setButton(buttonIndex++, encoderWrapper6.getButtonCCW());  // CCW button
+      Dashboard.setButton(buttonIndex++, encoderWrapper6.getButtonCW());   // CW button
+      Dashboard.setButton(buttonIndex++, rawButtonMatrix[4][4]); // the encoder's pushbutton
     } else {
-      i += 12; // skip 12 buttons/button positions because all buttons have already been set to 0 in the first line of this function
+      buttonIndex += 12; // skip 12 buttons/button positions because all buttons have already been set to 0 in the first line of this function
+    }
+  }
+
+  if (fourSwitchPosition == 0) {
+    // 10 "shifted" pushbuttons
+    for (uint8_t row = 2; row < 4; row++) {
+      for (uint8_t col = 0; col < 5; col++) {
+        Dashboard.setButton(buttonIndex, rawButtonMatrix[col][row]);
+        buttonIndex++;
+      }
     }
   }
   
