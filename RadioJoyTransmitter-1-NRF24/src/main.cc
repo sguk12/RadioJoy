@@ -7,31 +7,107 @@
  */
 
 #include <RF24.h>
-#include <SparkFun_ADXL345.h>
+#include <Wire.h>
 #include "RadioJoy.h"
 
 void findAxisCentre();
-int16_t readAxisData();
-int16_t axisData = 0;
-
-// moving average of the last AXIS_SAMPLES raw readings
-const uint8_t AXIS_SAMPLES = 30;
-int16_t axisSamples[AXIS_SAMPLES] = {0};
-uint8_t axisSampleIndex = 0;
-int32_t axisSampleSum = 0;
-
-int16_t updateAxisAverage(){
-  int16_t reading = readAxisData();
-  axisSampleSum -= axisSamples[axisSampleIndex];
-  axisSamples[axisSampleIndex] = reading;
-  axisSampleSum += reading;
-  axisSampleIndex = (axisSampleIndex + 1) % AXIS_SAMPLES;
-  return axisSampleSum / AXIS_SAMPLES;
-}
-
-ADXL345 adxl = ADXL345();             // USE FOR I2C COMMUNICATION
 
 RF24 radio(7, 8); // CE and CS pins used for NRF24L01 SPI connection
+
+// moving average of the last AXIS_SAMPLES raw readings
+const uint8_t AXIS_SAMPLES = 50;
+
+class Adxl
+{
+  public:
+    // Setup registers
+    void initADXL345() {
+      Wire.begin();
+      Wire.setClock(400000); // this sets the I2C speed to 400KHz, the default is 100KHz
+      adxlWrite(0x2D, 0x08); // POWER_CTL: measurement mode
+      adxlWrite(0x31, 0x08); // DATA_FORMAT: full resolution, ±2g
+      // adxlWrite(0x2C, 0x0B); // BW_RATE: 200 Hz
+      adxlWrite(0x2C, 0x0C); // BW_RATE: 400 Hz
+      adxlWrite(0x38, 0x9F); // FIFO_CTL: set FIFO Stream mode 10011111
+    };
+
+    void populateAxisSamplesFromFifo()
+    {
+      uint8_t status;
+      readFifoStatus(status);
+      status &= 0x3F;   // FIFO_STATUS entries = bits [5:0]
+      
+      fillCount += status;
+      if (fillCount > AXIS_SAMPLES) fillCount = AXIS_SAMPLES;
+
+      for(int i=0;i<status;i++)
+      {
+        int16_t xRaw, yRaw, zRaw;
+        if (readRaw(xRaw, yRaw, zRaw))
+        {
+          axisSampleSum -= axisSamples[axisSampleIndex];
+          axisSamples[axisSampleIndex] = zRaw;
+          axisSampleSum += zRaw;
+          axisSampleIndex = (axisSampleIndex + 1) % AXIS_SAMPLES;
+        }
+      }
+    };
+
+    int16_t getAveragedZValue()
+    {
+      return axisSampleSum / fillCount;
+    }
+
+  private:
+    const uint8_t ADXL345_ADDR = 0x53;   // SDO = GND
+
+    uint8_t fillCount = 1;
+    int16_t axisSamples[AXIS_SAMPLES] = {0};
+    uint8_t axisSampleIndex = 0;
+    int32_t axisSampleSum = 0;
+
+    // Write to ADXL345 register
+    void adxlWrite(uint8_t reg, uint8_t value) {
+      Wire.beginTransmission(ADXL345_ADDR);
+      Wire.write(reg);
+      Wire.write(value);
+      Wire.endTransmission();
+    };
+
+    // Read 6 bytes starting from DATAX0
+    bool readRaw(int16_t &x, int16_t &y, int16_t &z) {
+      Wire.beginTransmission(ADXL345_ADDR);
+      Wire.write(0x32);              // DATAX0
+      Wire.endTransmission(false);
+
+      if (Wire.requestFrom(ADXL345_ADDR, (uint8_t)6, (uint8_t)true) < 6) return false;  // bus error → don't read garbage
+      x = readWord();
+      y = readWord();
+      z = readWord();
+
+      return true;
+    }
+
+    int16_t readWord()
+    {
+      uint8_t lo = Wire.read();
+      uint8_t hi = Wire.read();
+      return (int16_t)(lo | (hi << 8));
+    }
+
+    // Read 1 byte starting from FIFO_STATUS
+    void readFifoStatus(uint8_t &value) {
+      Wire.beginTransmission(ADXL345_ADDR);
+      Wire.write(0x39);  // FIFO_STATUS
+      Wire.endTransmission(false);
+
+      Wire.requestFrom(ADXL345_ADDR, (uint8_t)1, (uint8_t)true);
+      value = (uint8_t) Wire.read();
+    };
+
+};
+
+Adxl adxl2 = Adxl();             // USE FOR I2C COMMUNICATION
 
 class Axis
 {
@@ -65,16 +141,11 @@ class Axis
 
 Axis rudder;
 
-
 void setup()
 {
   // Serial.begin(115200);
 
-  adxl.powerOn();                     // Power on the ADXL345
-  adxl.setRangeSetting(2);            // Give the range settings
-  adxl.setSpiBit(0);                  // Configure the device to be in 4 wire SPI mode when set to '0' 
-                                      // or 3 wire SPI mode when set to 1 Default: Set to 1
-  adxl.set_bw(0x0B);                  // sampling rate to 200Hz.
+  adxl2.initADXL345();
   findAxisCentre();
   
   radio.begin();
@@ -103,7 +174,7 @@ void loop()
   //   lastReport = now;
   // }
 
-  axisData = updateAxisAverage(); // rolling average over the last 10 readings
+  adxl2.populateAxisSamplesFromFifo();
 
   // let's wait for the server's invitation so sen our data
   radio.startListening();                                    // Now, continue listening
@@ -117,15 +188,13 @@ void loop()
     }      
   }
       
-  axisData = updateAxisAverage(); // rolling average over the last 10 readings
-
   if ( timeout ){                                             // Describe the results
     // Serial.println(F("Failed, radio timed out."));
   }else{
     uint8_t request = 0;
     radio.read( &request, sizeof(uint8_t) );
     if (fromRudderToReceiver == request) {
-      axisData = updateAxisAverage(); // rolling average over the last 10 readings
+      int16_t axisData = adxl2.getAveragedZValue();
 
       // if the request was for the rudder data
       // read the data from the sensors
@@ -148,15 +217,6 @@ void loop()
     }
   }
 
-  axisData = updateAxisAverage(); // rolling average over the last 10 readings
-
-}
-
-int16_t readAxisData(){
-  // Get the Accelerometer Readings
-  int x,y,z;                          // init variables hold results
-  adxl.readAccel(&x, &y, &z);         // Read the accelerometer values and store them in variables declared above x,y,z
-  return z;
 }
 
 
@@ -175,10 +235,9 @@ void findAxisCentre(){
   while ( millis() < started_find_centre_at + time_to_centre ){
     int LED_PIN = 13;
     pinMode(LED_PIN, OUTPUT);
-    
-    // Get the Accelerometer Readings
-    int x,y,z;                          // init variables hold results
-    adxl.readAccel(&x, &y, &z);         // Read the accelerometer values and store them in variables declared above x,y,z
+
+    adxl2.populateAxisSamplesFromFifo();
+    int16_t z = adxl2.getAveragedZValue();
     centre = (centre + z) >> 1; // low pass filter (kind of)
 
     unsigned long nowMillis = millis();
@@ -190,7 +249,6 @@ void findAxisCentre(){
     }
     delay(20);
   }
-
   
   rudder.minX = centre - rudder.half_range;
   rudder.maxX = centre + rudder.half_range;
