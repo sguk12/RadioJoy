@@ -15,7 +15,7 @@ void findAxisCentre();
 RF24 radio(7, 8); // CE and CS pins used for NRF24L01 SPI connection
 
 // moving average of the last AXIS_SAMPLES raw readings
-const uint8_t AXIS_SAMPLES = 50;
+const uint8_t AXIS_SAMPLES = 28; // low for responsivness
 
 class Adxl
 {
@@ -26,8 +26,7 @@ class Adxl
       Wire.setClock(400000); // this sets the I2C speed to 400KHz, the default is 100KHz
       adxlWrite(0x2D, 0x08); // POWER_CTL: measurement mode
       adxlWrite(0x31, 0x08); // DATA_FORMAT: full resolution, ±2g
-      // adxlWrite(0x2C, 0x0B); // BW_RATE: 200 Hz
-      adxlWrite(0x2C, 0x0C); // BW_RATE: 400 Hz
+      adxlWrite(0x2C, 0x0A); // BW_RATE: 100 Hz // less jitter
       adxlWrite(0x38, 0x9F); // FIFO_CTL: set FIFO Stream mode 10011111
     };
 
