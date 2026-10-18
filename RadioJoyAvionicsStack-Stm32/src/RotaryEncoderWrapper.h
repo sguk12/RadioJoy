@@ -106,6 +106,7 @@ public:
 
     // Reset positions to current encoder position
     void reset() {
+        encoder->setPosition(0);
         encoderPosition = getPosition();
         reportedPosition = encoderPosition;
         buttonCWState = BUTTON_UP;
