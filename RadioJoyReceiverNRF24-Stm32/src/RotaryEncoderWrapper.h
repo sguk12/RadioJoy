@@ -15,6 +15,8 @@ private:
     uint8_t buttonCCWState;
     uint8_t buttonCWState;
     bool ownsEncoder;
+    uint32_t lastToggle = 0;
+    static const uint32_t PULSE_MS = 30; // min press and release time per encoder step
 
 public:
     // Constructor that creates a new encoder
@@ -23,9 +25,9 @@ public:
     // use TWO03 mode when PIN_IN1, PIN_IN2 signals are both LOW or HIGH in latch position.
     RotaryEncoderWrapper(int pinA, int pinB, RotaryEncoder::LatchMode mode)
         : reportedPosition(0), encoderPosition(0), buttonCCWState(BUTTON_UP), buttonCWState(BUTTON_UP), ownsEncoder(true) {
-        encoder = new RotaryEncoder(pinA, pinB, mode);
+        encoder = new RotaryEncoder(pinA, pinB, mode); // also sets INPUT_PULLUP on both pins
     }
-    
+
     // Constructor that wraps an existing encoder
     RotaryEncoderWrapper(RotaryEncoder* existingEncoder)
         : encoder(existingEncoder), reportedPosition(0), encoderPosition(0), buttonCCWState(BUTTON_UP), buttonCWState(BUTTON_UP), ownsEncoder(false) {
@@ -44,7 +46,7 @@ public:
             encoder->tick();
         }
     }
-    
+
     // Get the current encoder position
     long getPosition() {
         return encoder ? encoder->getPosition() : 0;
@@ -55,30 +57,32 @@ public:
         return encoder ? encoder->getDirection() : RotaryEncoder::Direction::NOROTATION;
     }
     
-    // Update positions and return true if position changed
+    // Update positions and return true if a button state changed.
+    // Each encoder step becomes one press held for PULSE_MS followed by a release held for PULSE_MS,
+    // so the host sees it even when it polls slower than the USB report rate. Fast spins are queued.
     bool update() {
         if (!encoder) return false;
-        
-        encoderPosition = encoder->getPosition();
-        if (encoderPosition > reportedPosition) {
+        if (millis() - lastToggle < PULSE_MS) return false; // hold the current press/release
+
+        if (buttonCWState == BUTTON_DOWN || buttonCCWState == BUTTON_DOWN) {
+            buttonCWState = BUTTON_UP;
             buttonCCWState = BUTTON_UP;
-            buttonCWState = nextButtonState(buttonCWState);
-            if (buttonCWState == BUTTON_DOWN){
-                reportedPosition++;
-            }
+            lastToggle = millis();
+            return true;
+        }
+
+        encoderPosition = getPosition();
+        if (encoderPosition > reportedPosition) {
+            buttonCWState = BUTTON_DOWN;
+            reportedPosition++;
+            lastToggle = millis();
             return true;
         }
         if (encoderPosition < reportedPosition) {
-            buttonCWState = BUTTON_UP;
-            buttonCCWState = nextButtonState(buttonCCWState);
-            if (buttonCCWState == BUTTON_DOWN){
-                reportedPosition--;
-            }
+            buttonCCWState = BUTTON_DOWN;
+            reportedPosition--;
+            lastToggle = millis();
             return true;
-        }
-        if (encoderPosition == reportedPosition) {
-            buttonCWState = BUTTON_UP;
-            buttonCCWState = BUTTON_UP;
         }
         return false;
     }
@@ -102,10 +106,12 @@ public:
 
     // Reset positions to current encoder position
     void reset() {
+        encoder->setPosition(0);
         encoderPosition = getPosition();
         reportedPosition = encoderPosition;
         buttonCWState = BUTTON_UP;
         buttonCCWState = BUTTON_UP;
+        lastToggle = 0;
     }
 
     // Get raw encoder pointer (use carefully)
